@@ -6,8 +6,7 @@ illustrative.** They will be replaced once the experiment has run.
 
 ## Run it
 
-- **On GitHub Pages:** push this folder to a repository, then Settings → Pages → Deploy from a
-  branch → `main` / root. The site appears at `https://<your-username>.github.io/<repo>/`.
+- **On GitHub Pages:** Settings → Pages → Deploy from a branch → `main` / root. The site appears at `https://<your-username>.github.io/<repo>/`.
 - **Locally:** the page loads its data with `fetch`, so serve the folder rather than double-clicking
   the file: `python3 -m http.server`, then open http://localhost:8000.
 
