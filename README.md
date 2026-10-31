@@ -1,15 +1,10 @@
 # AI Oversight QA Dashboard
 
-Interactive dashboard for the capstone on human oversight of AI in wealth management. It shows a
-risk register for an AI advisor assistant (38 red-team test cases scored with RPN), a comparison of
-random sampling vs risk-based review, and one snowball case modeled as a dependency graph.
-
+Interactive dashboard for the capstone on human oversight of AI in wealth management. 
 **All numbers other than the severity, likelihood and detectability scores are synthesized and
 illustrative.** They will be replaced once the experiment has run.
 
 ## Run it
-
-It is a static site: no build step, no server code.
 
 - **On GitHub Pages:** push this folder to a repository, then Settings → Pages → Deploy from a
   branch → `main` / root. The site appears at `https://<your-username>.github.io/<repo>/`.
@@ -42,10 +37,3 @@ It is a static site: no build step, no server code.
 `data/oversight.json` holds the reviewer-behaviour experiment sample. No tab shows it right now; it is
 kept in case that tab comes back.
 
-## Before making the repo public
-
-The page mentions the sponsor's scenario ("LPL MVP scenario") and describes a client engagement. Check
-with the project team whether that is fine to publish. A private repo keeps it closed, but GitHub Pages
-on a private repo needs a paid GitHub plan.
-
-d3 is licensed under ISC (see `lib/d3.LICENSE`).
