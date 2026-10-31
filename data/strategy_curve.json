@@ -1,0 +1,182 @@
+[
+ {
+  "budget": 2,
+  "method": "Random sampling",
+  "recall": 0.0124,
+  "weighted_recall": 0.0124
+ },
+ {
+  "budget": 2,
+  "method": "Risk-based",
+  "recall": 0.1249,
+  "weighted_recall": 0.1445
+ },
+ {
+  "budget": 4,
+  "method": "Random sampling",
+  "recall": 0.0248,
+  "weighted_recall": 0.0248
+ },
+ {
+  "budget": 4,
+  "method": "Risk-based",
+  "recall": 0.2128,
+  "weighted_recall": 0.2386
+ },
+ {
+  "budget": 6,
+  "method": "Random sampling",
+  "recall": 0.0372,
+  "weighted_recall": 0.0372
+ },
+ {
+  "budget": 6,
+  "method": "Risk-based",
+  "recall": 0.2684,
+  "weighted_recall": 0.2938
+ },
+ {
+  "budget": 8,
+  "method": "Random sampling",
+  "recall": 0.0496,
+  "weighted_recall": 0.0496
+ },
+ {
+  "budget": 8,
+  "method": "Risk-based",
+  "recall": 0.3146,
+  "weighted_recall": 0.3295
+ },
+ {
+  "budget": 10,
+  "method": "Random sampling",
+  "recall": 0.062,
+  "weighted_recall": 0.062
+ },
+ {
+  "budget": 10,
+  "method": "Risk-based",
+  "recall": 0.347,
+  "weighted_recall": 0.3619
+ },
+ {
+  "budget": 12,
+  "method": "Random sampling",
+  "recall": 0.0744,
+  "weighted_recall": 0.0744
+ },
+ {
+  "budget": 12,
+  "method": "Risk-based",
+  "recall": 0.3794,
+  "weighted_recall": 0.3879
+ },
+ {
+  "budget": 14,
+  "method": "Random sampling",
+  "recall": 0.0868,
+  "weighted_recall": 0.0868
+ },
+ {
+  "budget": 14,
+  "method": "Risk-based",
+  "recall": 0.4118,
+  "weighted_recall": 0.4187
+ },
+ {
+  "budget": 16,
+  "method": "Random sampling",
+  "recall": 0.0992,
+  "weighted_recall": 0.0992
+ },
+ {
+  "budget": 16,
+  "method": "Risk-based",
+  "recall": 0.4257,
+  "weighted_recall": 0.4269
+ },
+ {
+  "budget": 18,
+  "method": "Random sampling",
+  "recall": 0.1116,
+  "weighted_recall": 0.1116
+ },
+ {
+  "budget": 18,
+  "method": "Risk-based",
+  "recall": 0.4257,
+  "weighted_recall": 0.4269
+ },
+ {
+  "budget": 20,
+  "method": "Random sampling",
+  "recall": 0.124,
+  "weighted_recall": 0.124
+ },
+ {
+  "budget": 20,
+  "method": "Risk-based",
+  "recall": 0.4534,
+  "weighted_recall": 0.4561
+ },
+ {
+  "budget": 22,
+  "method": "Random sampling",
+  "recall": 0.1364,
+  "weighted_recall": 0.1364
+ },
+ {
+  "budget": 22,
+  "method": "Risk-based",
+  "recall": 0.4581,
+  "weighted_recall": 0.4609
+ },
+ {
+  "budget": 24,
+  "method": "Random sampling",
+  "recall": 0.1488,
+  "weighted_recall": 0.1488
+ },
+ {
+  "budget": 24,
+  "method": "Risk-based",
+  "recall": 0.4673,
+  "weighted_recall": 0.4674
+ },
+ {
+  "budget": 26,
+  "method": "Random sampling",
+  "recall": 0.1612,
+  "weighted_recall": 0.1612
+ },
+ {
+  "budget": 26,
+  "method": "Risk-based",
+  "recall": 0.4766,
+  "weighted_recall": 0.4755
+ },
+ {
+  "budget": 28,
+  "method": "Random sampling",
+  "recall": 0.1736,
+  "weighted_recall": 0.1736
+ },
+ {
+  "budget": 28,
+  "method": "Risk-based",
+  "recall": 0.4904,
+  "weighted_recall": 0.4869
+ },
+ {
+  "budget": 30,
+  "method": "Random sampling",
+  "recall": 0.186,
+  "weighted_recall": 0.186
+ },
+ {
+  "budget": 30,
+  "method": "Risk-based",
+  "recall": 0.5136,
+  "weighted_recall": 0.5064
+ }
+]

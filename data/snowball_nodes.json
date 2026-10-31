@@ -1,0 +1,82 @@
+[
+ {
+  "node": "nav",
+  "label": "Vendor NAV feed",
+  "stage": 0,
+  "area": "System execution",
+  "affected": 1,
+  "unit": "fund",
+  "state": "root",
+  "note": "Growth fund NAV not updated; prior close reused"
+ },
+ {
+  "node": "cache",
+  "label": "Price cache",
+  "stage": 1,
+  "area": "System execution",
+  "affected": 1,
+  "unit": "stale price",
+  "state": "propagating",
+  "note": "Stale price served with no as-of timestamp"
+ },
+ {
+  "node": "hold",
+  "label": "Holdings join",
+  "stage": 2,
+  "area": "System execution",
+  "affected": 412,
+  "unit": "households",
+  "state": "propagating",
+  "note": "412 households hold the fund"
+ },
+ {
+  "node": "perf",
+  "label": "Daily performance report",
+  "stage": 3,
+  "area": "System execution",
+  "affected": 412,
+  "unit": "reports",
+  "state": "propagating",
+  "note": "Overnight report also built on the stale price"
+ },
+ {
+  "node": "calc",
+  "label": "Impact calculator",
+  "stage": 3,
+  "area": "Reasoning",
+  "affected": 268,
+  "unit": "answers",
+  "state": "propagating",
+  "note": "Fund shown as flat; loss understated"
+ },
+ {
+  "node": "answer",
+  "label": "Agent answer",
+  "stage": 4,
+  "area": "Reasoning",
+  "affected": 268,
+  "unit": "answers",
+  "state": "propagating",
+  "note": "'-1.6%, no action needed' reads as plausible"
+ },
+ {
+  "node": "review",
+  "label": "Advisor review",
+  "stage": 5,
+  "area": "Human review",
+  "affected": 268,
+  "unit": "answers",
+  "state": "control",
+  "note": "Reviewer checks the number, not its base or freshness"
+ },
+ {
+  "node": "client",
+  "label": "Sent to clients",
+  "stage": 6,
+  "area": "Human review",
+  "affected": 241,
+  "unit": "clients (random)",
+  "state": "harm",
+  "note": "Under random sampling, most reach clients"
+ }
+]

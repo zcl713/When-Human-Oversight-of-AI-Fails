@@ -1,0 +1,44 @@
+[
+ {
+  "edge": "nav-cache",
+  "source": "nav",
+  "target": "cache",
+  "carried": 1
+ },
+ {
+  "edge": "cache-hold",
+  "source": "cache",
+  "target": "hold",
+  "carried": 412
+ },
+ {
+  "edge": "hold-calc",
+  "source": "hold",
+  "target": "calc",
+  "carried": 268
+ },
+ {
+  "edge": "hold-perf",
+  "source": "hold",
+  "target": "perf",
+  "carried": 412
+ },
+ {
+  "edge": "calc-answer",
+  "source": "calc",
+  "target": "answer",
+  "carried": 268
+ },
+ {
+  "edge": "answer-review",
+  "source": "answer",
+  "target": "review",
+  "carried": 268
+ },
+ {
+  "edge": "review-client",
+  "source": "review",
+  "target": "client",
+  "carried": 241
+ }
+]

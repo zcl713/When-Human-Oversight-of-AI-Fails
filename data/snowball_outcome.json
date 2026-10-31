@@ -1,0 +1,20 @@
+[
+ {
+  "method": "Random sampling",
+  "affected": 268,
+  "inspected": 27,
+  "caught": 6,
+  "first_catch_min": 212,
+  "reached_clients": 241,
+  "root_cause_found": "No: each catch fixed as a one-off"
+ },
+ {
+  "method": "Risk-based",
+  "affected": 268,
+  "inspected": 268,
+  "caught": 1,
+  "first_catch_min": 14,
+  "reached_clients": 19,
+  "root_cause_found": "Yes: freshness flag clustered on one fund"
+ }
+]

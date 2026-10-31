@@ -1,0 +1,28 @@
+[
+ {
+  "method": "Random sampling",
+  "budget_pct": 10,
+  "outputs": 2000,
+  "reviewed": 200,
+  "errors_present": 134,
+  "errors_inspected": 13.4,
+  "errors_caught": 8.3,
+  "critical_present": 38,
+  "critical_caught": 2.4,
+  "review_hours": 15.0,
+  "errors_missed": 125.7
+ },
+ {
+  "method": "Risk-based",
+  "budget_pct": 10,
+  "outputs": 2000,
+  "reviewed": 200,
+  "errors_present": 134,
+  "errors_inspected": 75,
+  "errors_caught": 46.5,
+  "critical_present": 38,
+  "critical_caught": 14.9,
+  "review_hours": 15.0,
+  "errors_missed": 87.5
+ }
+]

@@ -1,0 +1,38 @@
+[
+ {
+  "area": "Reasoning",
+  "method": "Random sampling",
+  "errors": 38,
+  "caught": 2.4
+ },
+ {
+  "area": "Reasoning",
+  "method": "Risk-based",
+  "errors": 38,
+  "caught": 12.4
+ },
+ {
+  "area": "Planning",
+  "method": "Random sampling",
+  "errors": 43,
+  "caught": 2.7
+ },
+ {
+  "area": "Planning",
+  "method": "Risk-based",
+  "errors": 43,
+  "caught": 8.1
+ },
+ {
+  "area": "System execution",
+  "method": "Random sampling",
+  "errors": 53,
+  "caught": 3.3
+ },
+ {
+  "area": "System execution",
+  "method": "Risk-based",
+  "errors": 53,
+  "caught": 26.0
+ }
+]
