@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Oversight QA: one-page summary</title>
+<meta name="description" content="One-page summary: how well human review catches high-impact errors from an AI advisor assistant (sample data).">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<main id="dash-root">
+<div class="qa">
+  <header class="qa-head">
+    <h1 class="qa-title">AI oversight QA: advisor assistant</h1>
+    <span class="qa-sample"><i></i><span><b>Illustrative sample data.</b> Severity, likelihood and detectability scores come from the red-team test suite. Every other number is simulated and will be replaced once the experiment has run.</span></span>
+  </header>
+  <section class="qa-page" data-summary-root data-mode="lean"></section>
+  <footer class="qa-foot"><span class="qa-badge">Illustrative</span> Sample data, illustrative. <a href="../">Full version</a> (strategy detail, reviewer reliability, failure-mode register, method and assumptions)</footer>
+</div>
+</main>
+<script src="../lib/d3.min.js"></script>
+<script src="../js/dash-shim.js" data-base="../" data-datasets="sim_grid sim_meta snowball quality"></script>
+<script src="../js/shared.js"></script>
+</body>
+</html>
