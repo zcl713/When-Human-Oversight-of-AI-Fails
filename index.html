@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Oversight QA Dashboard</title>
-<meta name="description" content="Risk register, inspection-strategy comparison and snowball case for an AI advisor assistant (sample data).">
+<meta name="description" content="How well human review catches high-impact errors from an AI advisor assistant: random sampling vs risk-based review (sample data).">
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -12,108 +13,234 @@
 <div class="qa">
   <header class="qa-head">
     <h1 class="qa-title">AI oversight QA: advisor assistant</h1>
-    <span class="qa-sample"><i></i>Sample data. Scores come from the red-team test suite; the dataset was synthesized from the suite's examples. Numbers are illustrative for now, until we run the experiment.</span>
+    <span class="qa-sample"><i></i><span><b>Illustrative sample data.</b> Severity, likelihood and detectability scores come from the red-team test suite. Every other number is simulated and will be replaced once the experiment has run.</span></span>
+    <p class="qa-note">Full version. <a href="lean/">One-page version</a></p>
   </header>
 
   <nav class="qa-tabs" role="tablist" aria-label="Dashboard sections">
-    <button class="qa-tab" role="tab" data-tab="register" aria-selected="true">Risk register</button>
-    <button class="qa-tab" role="tab" data-tab="strategies" aria-selected="false">Inspection strategies</button>
-    <button class="qa-tab" role="tab" data-tab="snowball" aria-selected="false">Snowball case</button>
-    <button class="qa-tab" role="tab" data-tab="method" aria-selected="false">Scoring method</button>
+    <button class="qa-tab" role="tab" data-tab="summary" aria-selected="true">Summary</button>
+    <button class="qa-tab" role="tab" data-tab="strategies" aria-selected="false">Strategy comparison</button>
+    <button class="qa-tab" role="tab" data-tab="snowball" aria-selected="false">Snowball</button>
+    <button class="qa-tab" role="tab" data-tab="reviewers" aria-selected="false">Reviewer reliability</button>
+    <button class="qa-tab" role="tab" data-tab="quality" aria-selected="false">Quality over time</button>
+    <button class="qa-tab" role="tab" data-tab="register" aria-selected="false">Failure-mode register</button>
+    <button class="qa-tab" role="tab" data-tab="method" aria-selected="false">Method &amp; definitions</button>
   </nav>
 
-  <!-- ============ RISK REGISTER ============ -->
-  <section class="qa-page" id="register" data-panel="register">
-    <p class="qa-lede">The red-team test suite has <b data-draw="kpi" data-source="kpi" data-field="total" data-row="0">—</b> test cases. Each test case checks one failure mode, named in the suite's Test column (for example "Stale mutual fund NAV"), and belongs to one category: Data integrity, Calculation, Intent resolution, Overconfidence and compliance, Security and privacy, or Human oversight. Each is scored on severity, likelihood and detectability, which multiply into its risk priority number (RPN) and risk tier.</p>
-    <div class="qa-kpis">
-      <div class="qa-kpi"><span class="qa-kpi-label">Test cases</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-source="kpi" data-field="total" data-row="0">—</span><span class="qa-kpi-sub">one failure mode each</span></div>
-      <div class="qa-kpi"><span class="qa-kpi-label">Critical-tier test cases</span><span class="qa-kpi-value is-bad dash-skeleton" data-draw="kpi" data-source="kpi" data-field="critical" data-row="0">—</span><span class="qa-kpi-sub">highest risk tier; thresholds on the <button class="qa-link" data-goto="method">Scoring method</button> tab</span></div>
-      <div class="qa-kpi"><span class="qa-kpi-label">Average RPN</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-source="kpi" data-field="avg_rpn" data-row="0">—</span><span class="qa-kpi-sub">mean across all test cases, out of <span data-draw="maxrpn">—</span></span></div>
-      <div class="qa-kpi"><span class="qa-kpi-label">Test cases failed</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-source="kpi" data-field="failed" data-row="0">—</span><span class="qa-kpi-sub">of <span data-draw="kpi" data-source="kpi" data-field="run" data-row="0">—</span> run so far (sample results)</span></div>
-      <div class="qa-kpi"><span class="qa-kpi-label">Pass rate</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-source="kpi" data-field="pass_rate" data-row="0">—</span><span class="qa-kpi-sub">of test cases run (sample results)</span></div>
-    </div>
+  <!-- ============ SUMMARY (same blocks as lean/index.html, condensed) ============ -->
+  <section class="qa-page" id="summary" data-panel="summary" role="tabpanel">
+    <div class="qa-page" data-summary-root data-mode="condensed"></div>
+  </section>
 
+  <!-- ============ STRATEGY COMPARISON ============ -->
+  <section class="qa-page" id="strategies" data-panel="strategies" role="tabpanel" hidden>
+    <p class="qa-lede">Both strategies review the same number of agent answers with the same reviewers and the same review screen. Random sampling picks answers at random. Risk-based review ranks answers by guardrail signals (coverage, freshness, calculation path, intent, advice language) and reviews the riskiest first. Move the sliders to see how the results change.</p>
+    <div class="qa-sliders" role="group" aria-label="What-if settings">
+      <label class="qa-slider"><span>Review budget <output>—</output></span><input type="range" data-draw="slider" data-slider="budget" disabled></label>
+      <label class="qa-slider"><span>Reviewer catch rate <output>—</output></span><input type="range" data-draw="slider" data-slider="catch" disabled></label>
+      <button class="qa-chip" type="button" data-reset>Reset</button>
+      <span class="qa-note" data-draw="settingsNote"></span>
+    </div>
+    <div class="qa-card">
+      <h2>High-impact errors caught as the review budget grows</h2>
+      <p class="qa-note">Share of injected high-impact errors that reviewers catch. Bands show the middle 95% of simulated runs. The thin dotted line is the team's daily capacity; past it, reviews get less careful.</p>
+      <div class="qa-legend"><span><i class="qa-sw thin" style="background:var(--series-1)"></i>Risk-based (solid)</span><span><i class="qa-sw thin" style="background:var(--cds-chart-muted)"></i>Random sampling (dashed)</span></div>
+      <div class="qa-chart tall dash-skeleton" data-draw="curve"></div>
+      <p class="qa-chart-summary"></p>
+    </div>
     <div class="qa-grid">
-      <div class="qa-card" id="area-tier">
-        <h2>Risk tier by workflow area</h2>
-        <p class="qa-note">Number of test cases by the step of the agent's workflow where the failure starts (reasoning, planning or system execution), split by risk tier. Human review is the oversight layer, shown separately.</p>
-        <div class="qa-legend"><span><i class="qa-sw sw-critical"></i>Critical</span><span><i class="qa-sw sw-high"></i>High</span><span><i class="qa-sw sw-medium"></i>Medium</span><span><i class="qa-sw sw-low"></i>Low</span></div>
-        <div class="qa-chart dash-skeleton" data-draw="areaTier" data-source="by_area_tier"></div>
+      <div class="qa-card">
+        <h2>Where high-impact errors are missed, by error type</h2>
+        <p class="qa-note">Errors missed = never selected for review + reviewed but not caught. Red outline: the type risk-based review misses most often.</p>
+        <div class="qa-legend"><span><i class="qa-sw" style="background:var(--series-1)"></i>Caught</span><span><i class="qa-sw" style="background:var(--series-4)"></i>Reviewed but not caught</span><span><i class="qa-sw" style="background:var(--cds-chart-muted)"></i>Never selected for review</span></div>
+        <div class="qa-chart dash-skeleton" data-draw="byType"></div>
+        <p class="qa-chart-summary"></p>
       </div>
-      <div class="qa-card" id="results">
-        <h2>Test status</h2>
-        <p class="qa-note">Latest result for each test case (sample results).</p>
-        <div class="qa-chart dash-skeleton" data-draw="results" data-source="by_result" style="min-height:160px"></div>
+      <div class="qa-card">
+        <h2>Review burden vs team capacity</h2>
+        <p class="qa-note">Daily reviews at the chosen budget, the team's capacity, and the daily reviews each strategy would need to catch half of the high-impact errors (assuming the team were staffed for it).</p>
+        <div class="qa-chart dash-skeleton" data-draw="burden" style="min-height:180px"></div>
+        <p class="qa-chart-summary"></p>
       </div>
     </div>
-
-    <div class="qa-card" id="by-category">
-      <h2>Roll-up by category</h2>
-      <p class="qa-note">Groups the test cases by the suite's Category column and shows, for each category: how many test cases it has, how many have been run, how many failed, the pass rate among those run, and the average and highest RPN. Categories describe the kind of problem; the workflow areas above describe the step where it happens.</p>
+    <div class="qa-card">
+      <h2>How the misses split</h2>
+      <p class="qa-note">Averages over the simulated runs, with the middle-95% range on hover. The parts always add up: caught + never selected + reviewed but not caught = injected.</p>
       <div class="qa-tablewrap">
-        <table data-source="by_category" data-row-key="category">
-          <thead><tr>
-            <th data-field="category">Category</th>
-            <th class="num" data-field="tests">Test cases</th>
-            <th class="num" data-field="run">Run</th>
-            <th class="num" data-field="fail">Fail</th>
-            <th class="num" data-field="pass_rate">Pass rate</th>
-            <th class="num" data-field="avg_rpn">Avg RPN</th>
-            <th class="num" data-field="max_rpn">Max RPN</th>
-          </tr></thead>
-          <tbody data-draw="catTable"></tbody>
+        <table>
+          <thead><tr><th>Strategy</th><th>Errors</th><th class="num">Injected</th><th class="num">Caught</th><th class="num">Never selected</th><th class="num">Reviewed, not caught</th><th class="num">Missed</th></tr></thead>
+          <tbody data-draw="splitTable"></tbody>
         </table>
       </div>
     </div>
+  </section>
 
-    <div class="qa-card" id="top10">
-      <h2>Top 10 risks by RPN</h2>
-      <p class="qa-note">Ties broken by severity. The last column tags failures injected in the LPL MVP scenario.</p>
+  <!-- ============ SNOWBALL ============ -->
+  <section class="qa-page" id="snowball" data-panel="snowball" role="tabpanel" hidden>
+    <p class="qa-lede qa-verdict" data-draw="snowLede">—</p>
+    <div class="qa-callout">
+      <div><b>Random sampling treats each catch as a one-off.</b> A reviewer fixes the answer in front of them; nothing links it to the other answers built on the same stale price, so they keep reaching clients.</div>
+      <div><b>Risk-based review finds the shared root cause.</b> Answers carrying a freshness flag on the same fund reach reviewers together; once they cluster, the team traces them to the feed and blocks every later answer that uses it.</div>
+    </div>
+    <div class="qa-card">
+      <h2>Clients reached over the trading day</h2>
+      <p class="qa-note">The stale feed starts at 0h. Answers that use it arrive through the day. Lines are averages over simulated days; bands are the middle 95%.</p>
+      <div class="qa-legend"><span><i class="qa-sw thin" style="background:var(--color-fg-muted)"></i>Affected answers (dotted)</span><span><i class="qa-sw thin" style="background:var(--cds-chart-muted)"></i>Random sampling: reached clients (dashed)</span><span><i class="qa-sw thin" style="background:var(--series-1)"></i>Risk-based: reached clients (solid)</span></div>
+      <div class="qa-chart tall dash-skeleton" data-draw="snowTime"></div>
+      <p class="qa-chart-summary"></p>
+    </div>
+    <div class="qa-card" id="snowball-graph">
+      <div class="qa-cardhead">
+        <div><h2>How the error travels</h2><p class="qa-note">Each box is a step in the workflow, with the number of items the stale price reaches there. Hover or tap a box for what goes wrong.</p></div>
+        <div class="qa-seg" role="group" aria-label="Inspection strategy">
+          <button data-sb="Random sampling" aria-pressed="true">Random sampling</button>
+          <button data-sb="Risk-based" aria-pressed="false">Risk-based</button>
+        </div>
+      </div>
+      <div class="qa-legend"><span><i class="qa-sw" style="background:var(--series-1)"></i>System execution</span><span><i class="qa-sw" style="background:var(--series-2)"></i>Reasoning</span><span><i class="qa-sw" style="background:var(--series-4)"></i>Control layer (human review)</span></div>
+      <div class="qa-graph dash-skeleton" data-draw="graph"></div>
+      <p class="qa-chart-summary"></p>
+    </div>
+    <div class="qa-card">
+      <h2>Outcome by strategy</h2>
       <div class="qa-tablewrap">
-        <table data-source="top10" data-row-key="id">
+        <table>
+          <thead><tr><th>Strategy</th><th class="num">Affected answers</th><th class="num">Reviewed</th><th class="num">Caught</th><th class="num">Blocked at source</th><th class="num">Reached clients</th><th>Detection</th></tr></thead>
+          <tbody data-draw="snowTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ REVIEWER RELIABILITY ============ -->
+  <section class="qa-page" id="reviewers" data-panel="reviewers" role="tabpanel" hidden>
+    <p class="qa-lede">Human review is not an error type. It is the <b>control layer</b>: the step that is supposed to catch what the agent got wrong. This view shows how often reviewers catch a planted error under different working conditions. Each condition is linked to a control-layer test case in the register (H1 to H5 and H7).</p>
+    <div class="qa-card">
+      <h2>Reviewer catch rate by condition <span class="qa-badge">Illustrative</span></h2>
+      <p class="qa-note">Dots are the share of planted errors caught; lines are 95% Wilson intervals. The dashed line is the baseline. Simulated from the same reviewer model the strategy comparison uses.</p>
+      <div class="qa-chart dash-skeleton" data-draw="reviewers"></div>
+      <p class="qa-chart-summary"></p>
+    </div>
+    <div class="qa-card">
+      <div class="qa-tablewrap">
+        <table>
+          <thead><tr><th>Condition</th><th>Linked test</th><th class="num">Reviewers</th><th class="num">Caught / shown</th><th class="num">Catch rate</th><th class="num">95% Wilson interval</th></tr></thead>
+          <tbody data-draw="reviewerTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ QUALITY OVER TIME ============ -->
+  <section class="qa-page" id="quality" data-panel="quality" role="tabpanel" hidden>
+    <p class="qa-lede">Risk-based review looks where errors are likely, so on its own it cannot tell you the overall error rate. A small random slice of answers is reviewed every day to keep an unbiased estimate and to spot drift.</p>
+    <div class="qa-card">
+      <h2>Estimated vs true error rate, by day <span class="qa-badge">Illustrative</span></h2>
+      <div class="qa-legend"><span><i class="qa-sw" style="background:var(--series-1);border-radius:50%"></i>Estimate with 95% Wilson interval</span><span><i class="qa-sw thin" style="background:var(--color-fg)"></i>True error rate (dashed)</span><span><i class="qa-sw thin" style="background:var(--color-bad)"></i>Alert limit</span></div>
+      <div class="qa-chart tall dash-skeleton" data-draw="quality"></div>
+      <p class="qa-chart-summary"></p>
+    </div>
+    <div class="qa-card">
+      <div class="qa-tablewrap">
+        <table>
+          <thead><tr><th class="num">Day</th><th class="num">Reviewed</th><th class="num">Errors found</th><th class="num">Estimate</th><th class="num">95% Wilson interval</th><th class="num">True rate</th><th>Status</th></tr></thead>
+          <tbody data-draw="qualityTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FAILURE-MODE REGISTER ============ -->
+  <section class="qa-page" id="register" data-panel="register" role="tabpanel" hidden>
+    <p class="qa-lede">The red-team test suite has <b data-draw="kpi" data-field="total">—</b> test cases. <b data-draw="kpi" data-field="agent">—</b> describe ways the agent can fail; each is an error type (Reasoning, Planning or System execution). The other <b data-draw="kpi" data-field="control">—</b> describe ways human review can fail; they belong to the control layer and are listed separately. Each test case is scored on severity, likelihood and detectability, which multiply into its risk priority number (RPN).</p>
+    <div class="qa-kpis">
+      <div class="qa-kpi"><span class="qa-kpi-label">Agent failure types</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-field="agent">—</span><span class="qa-kpi-sub">one failure mode each</span></div>
+      <div class="qa-kpi"><span class="qa-kpi-label">High-impact failure types</span><span class="qa-kpi-value is-bad dash-skeleton" data-draw="kpi" data-field="high_impact">—</span><span class="qa-kpi-sub" data-draw="hiRule">—</span></div>
+      <div class="qa-kpi"><span class="qa-kpi-label">Average RPN, agent failures</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-field="avg_rpn">—</span><span class="qa-kpi-sub">out of <span data-draw="maxrpn">—</span></span></div>
+      <div class="qa-kpi"><span class="qa-kpi-label">Test cases failed <span class="qa-badge">Illustrative</span></span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-field="failed">—</span><span class="qa-kpi-sub">of <span data-draw="kpi" data-field="run">—</span> with a sample result</span></div>
+    </div>
+
+    <div class="qa-grid">
+      <div class="qa-card">
+        <h2>Risk tier by error type (agent failures)</h2>
+        <p class="qa-note">Number of agent failure types by the step of the agent's workflow where the failure starts, split by risk tier. Control-layer cases are not included.</p>
+        <div class="qa-legend"><span><i class="qa-sw sw-critical"></i>Critical</span><span><i class="qa-sw sw-high"></i>High</span><span><i class="qa-sw sw-medium"></i>Medium</span><span><i class="qa-sw sw-low"></i>Low</span></div>
+        <div class="qa-chart dash-skeleton" data-draw="areaTier"></div>
+        <p class="qa-chart-summary"></p>
+      </div>
+      <div class="qa-card">
+        <h2>Test status <span class="qa-badge">Illustrative</span></h2>
+        <p class="qa-note">Sample result for each test case, all test cases. These are placeholders, not real runs.</p>
+        <div class="qa-chart dash-skeleton" data-draw="results" style="min-height:160px"></div>
+        <p class="qa-chart-summary"></p>
+      </div>
+    </div>
+
+    <div class="qa-card">
+      <h2>Top 10 agent failure modes by RPN</h2>
+      <p class="qa-note">Agent failures only; ties broken by severity. The last column tags failures injected in the LPL MVP scenario.</p>
+      <div class="qa-tablewrap">
+        <table>
           <thead><tr>
-            <th class="num" data-field="rank">#</th>
-            <th data-field="id">ID</th>
-            <th data-field="test">Failure mode</th>
-            <th class="hide-sm" data-field="area">Workflow area</th>
-            <th class="num" data-field="rpn">RPN</th>
-            <th data-field="tier">Tier</th>
-            <th data-field="result">Result</th>
-            <th class="hide-sm" data-field="mvp">MVP scenario</th>
+            <th class="num">#</th><th>ID</th><th>Failure mode</th><th class="hide-sm">Error type</th><th class="num">RPN</th><th>Tier</th><th>Result <span class="qa-badge">Illustrative</span></th><th class="hide-sm">MVP scenario</th>
           </tr></thead>
           <tbody data-draw="top10"></tbody>
         </table>
       </div>
     </div>
 
-    <div class="qa-card" id="full-register">
-      <div class="qa-cardhead">
-        <div><h2>Full risk register</h2><p class="qa-note">All test cases. S, L and D are severity, likelihood and detectability (1 to 5). "What it is" is the expected failure and "Evidence" is what the runs showed. Click a column heading to sort.</p></div>
+    <div class="qa-card">
+      <h2>Control layer: human-review failure modes</h2>
+      <p class="qa-note"><b>Their RPN is not comparable to agent failures.</b> These scores rate a breakdown of the review step itself, not an error in an answer, so they are not ranked with agent failures and are never used as risk priors in the simulation. See the Reviewer reliability tab.</p>
+      <div class="qa-tablewrap">
+        <table>
+          <thead><tr><th>ID</th><th>Failure mode</th><th class="num">RPN</th><th class="hide-sm">What it is</th><th>Result <span class="qa-badge">Illustrative</span></th></tr></thead>
+          <tbody data-draw="hcases"></tbody>
+        </table>
       </div>
+    </div>
+
+    <div class="qa-card">
+      <h2>Roll-up by category (agent failures)</h2>
+      <p class="qa-note">Groups the agent test cases by the suite's Category column. Categories describe the kind of problem; error types describe the step where it happens. Run, fail and pass-rate columns use the illustrative sample results.</p>
+      <div class="qa-tablewrap">
+        <table>
+          <thead><tr>
+            <th>Category</th><th class="num">Test cases</th><th class="num">Run</th><th class="num">Fail</th><th class="num">Pass rate <span class="qa-badge">Illustrative</span></th><th class="num">Avg RPN</th><th class="num">Max RPN</th>
+          </tr></thead>
+          <tbody data-draw="catTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="qa-card" id="full-register">
+      <h2>Full failure-mode register</h2>
+      <p class="qa-note">All test cases. S, L and D are severity, likelihood and detectability (1 to 5). "What it is" is the expected failure. Results and evidence are illustrative placeholders. Click a column heading to sort.</p>
       <div class="qa-tools">
         <input class="qa-search" id="qa-search" type="search" placeholder="Search test cases" aria-label="Search test cases">
-        <div class="qa-seg" role="group" aria-label="Workflow area">
-          <button class="qa-chip" data-area="" aria-pressed="true">All areas</button>
+        <div class="qa-seg" role="group" aria-label="Filter by error type or control layer">
+          <button class="qa-chip" data-area="" aria-pressed="true">All</button>
           <button class="qa-chip" data-area="Reasoning" aria-pressed="false">Reasoning</button>
           <button class="qa-chip" data-area="Planning" aria-pressed="false">Planning</button>
           <button class="qa-chip" data-area="System execution" aria-pressed="false">System execution</button>
-          <button class="qa-chip" data-area="Human review" aria-pressed="false">Human review</button>
+          <span class="qa-seg-div" aria-hidden="true"></span>
+          <button class="qa-chip" data-area="Control layer (human review)" aria-pressed="false">Control layer (human review)</button>
         </div>
       </div>
       <div class="qa-tablewrap scroll">
-        <table data-source="risks" data-row-key="id" class="qa-register">
+        <table class="qa-register">
           <thead><tr>
-            <th data-field="id"><button class="qa-sort" data-sort="id">ID</button></th>
-            <th data-field="test"><button class="qa-sort" data-sort="test">Failure mode</button></th>
-            <th class="hide-sm" data-field="area"><button class="qa-sort" data-sort="area">Area</button></th>
-            <th class="num" data-field="severity"><button class="qa-sort" data-sort="severity">S</button></th>
-            <th class="num" data-field="likelihood"><button class="qa-sort" data-sort="likelihood">L</button></th>
-            <th class="num" data-field="detectability"><button class="qa-sort" data-sort="detectability">D</button></th>
-            <th class="num" data-field="rpn"><button class="qa-sort" data-sort="rpn">RPN</button></th>
-            <th data-field="tier"><button class="qa-sort" data-sort="tier">Tier</button></th>
-            <th data-field="result"><button class="qa-sort" data-sort="result">Result</button></th>
-            <th data-field="what">What it is</th>
-            <th data-field="evidence">Evidence</th>
+            <th><button class="qa-sort" data-sort="id">ID</button></th>
+            <th><button class="qa-sort" data-sort="test">Failure mode</button></th>
+            <th class="hide-sm"><button class="qa-sort" data-sort="area">Error type / layer</button></th>
+            <th class="num hide-sm"><button class="qa-sort" data-sort="severity">S</button></th>
+            <th class="num hide-sm"><button class="qa-sort" data-sort="likelihood">L</button></th>
+            <th class="num hide-sm"><button class="qa-sort" data-sort="detectability">D</button></th>
+            <th class="num"><button class="qa-sort" data-sort="rpn">RPN</button></th>
+            <th><button class="qa-sort" data-sort="tier">Tier</button></th>
+            <th><button class="qa-sort" data-sort="result">Result</button> <span class="qa-badge">Illustrative</span></th>
+            <th class="hide-sm">What it is</th>
+            <th class="hide-sm">Evidence</th>
           </tr></thead>
           <tbody data-draw="register"></tbody>
         </table>
@@ -121,65 +248,19 @@
     </div>
   </section>
 
-  <!-- ============ STRATEGIES ============ -->
-  <section class="qa-page" id="strategies" data-panel="strategies" hidden>
-    <p class="qa-lede">Both strategies review <b data-draw="sum" data-source="strategy_summary" data-where="method=Risk-based" data-field="reviewed">—</b> of <b data-draw="sum" data-source="strategy_summary" data-where="method=Risk-based" data-field="outputs">—</b> agent answers (10%). Risk-based review ranks answers by guardrail signals (coverage, freshness, calculation path, intent, advice language) and inspects the riskiest first.</p>
-    <div class="qa-cmp">
-      <div class="qa-card" id="cmp-random">
-        <h3>Random sampling (baseline)</h3>
-        <dl>
-          <dt>Errors caught</dt><dd class="big" data-draw="sum" data-source="strategy_summary" data-where="method=Random sampling" data-field="errors_caught">—</dd>
-          <dt>Critical errors caught (severity ≥ 4)</dt><dd data-draw="sum" data-source="strategy_summary" data-where="method=Random sampling" data-field="critical_caught">—</dd>
-          <dt>Errors that reached clients</dt><dd data-draw="sum" data-source="strategy_summary" data-where="method=Random sampling" data-field="errors_missed">—</dd>
-        </dl>
-      </div>
-      <div class="qa-card" id="cmp-risk">
-        <h3>Risk-based review</h3>
-        <dl>
-          <dt>Errors caught</dt><dd class="big" data-draw="sum" data-source="strategy_summary" data-where="method=Risk-based" data-field="errors_caught">—</dd>
-          <dt>Critical errors caught (severity ≥ 4)</dt><dd data-draw="sum" data-source="strategy_summary" data-where="method=Risk-based" data-field="critical_caught">—</dd>
-          <dt>Errors that reached clients</dt><dd data-draw="sum" data-source="strategy_summary" data-where="method=Risk-based" data-field="errors_missed">—</dd>
-        </dl>
-      </div>
+  <!-- ============ METHOD & DEFINITIONS ============ -->
+  <section class="qa-page" id="method" data-panel="method" role="tabpanel" hidden>
+    <div class="qa-card">
+      <h2>Definitions used on every page</h2>
+      <dl class="qa-defs">
+        <dt>High-impact error</dt><dd>An injected error whose failure type has <b data-draw="hiRuleText">—</b>. The threshold is one constant (<code>HIGH_IMPACT_RPN</code> in the data generator). Failure types that qualify: <span data-draw="hiTypes">—</span>.</dd>
+        <dt>Error type</dt><dd>Where in the agent's workflow the failure starts. <b>Planning:</b> deciding what to do (reading the intent, choosing scope, picking the tool). <b>Reasoning:</b> working with what came back (arithmetic, interpretation, confidence, advice language). <b>System execution:</b> the tools and data themselves (feeds, prices, entitlements, reconciliation). Every injected error is given a failure type from the test suite and takes that test's RPN.</dd>
+        <dt>Control layer</dt><dd>Human review. It is not an error type: it is the step that should catch errors. Its failure modes (H1 to H8) are shown separately and their RPNs are never used as risk priors.</dd>
+        <dt>Errors missed</dt><dd>Never selected for review + reviewed but not caught.</dd>
+        <dt>Review minutes per high-impact error caught</dt><dd>Total review time at the chosen budget divided by the high-impact errors caught.</dd>
+        <dt>Clients reached before containment</dt><dd>In the stale-price case: affected answers that were neither caught by a reviewer nor blocked at the source.</dd>
+      </dl>
     </div>
-    <div class="qa-card" id="curve">
-      <div class="qa-cardhead">
-        <div><h2>Share of errors caught as review budget grows</h2><p class="qa-note">Severity-weighted counts a severity-5 miss five times as much as a severity-1 miss.</p></div>
-        <div class="qa-seg" role="group" aria-label="Measure">
-          <button data-metric="recall" aria-pressed="true">All errors</button>
-          <button data-metric="weighted_recall" aria-pressed="false">Severity-weighted</button>
-        </div>
-      </div>
-      <div class="qa-legend"><span><i class="qa-sw thin" data-sw="Risk-based"></i>Risk-based</span><span><i class="qa-sw thin" data-sw="Random sampling"></i>Random sampling</span></div>
-      <div class="qa-chart tall dash-skeleton" data-draw="curve" data-source="strategy_curve"></div>
-    </div>
-
-    <div class="qa-card" id="by-area">
-      <h2>Share of errors caught by workflow area, at 10% budget</h2>
-      <p class="qa-note">Risk signals are strongest for system-execution failures (stale data, missing accounts) and weakest for planning failures such as a misread intent, which look normal to every guardrail.</p>
-      <div class="qa-legend"><span><i class="qa-sw" data-sw="Risk-based"></i>Risk-based</span><span><i class="qa-sw" data-sw="Random sampling"></i>Random sampling</span></div>
-      <div class="qa-chart dash-skeleton" data-draw="byArea" data-source="area_share"></div>
-    </div>
-  </section>
-
-  <!-- ============ SNOWBALL ============ -->
-  <section class="qa-page" id="snowball" data-panel="snowball" hidden>
-    <p class="qa-lede">One stale mutual-fund price (test D1) flows through the price cache into every household that holds the fund. Under random sampling it reached <b data-draw="outcome" data-source="snowball_outcome" data-where="method=Random sampling" data-field="reached_clients">—</b> clients; under risk-based review, <b data-draw="outcome" data-source="snowball_outcome" data-where="method=Risk-based" data-field="reached_clients">—</b>.</p>
-    <div class="qa-card" id="snowball-graph">
-      <div class="qa-cardhead">
-        <div><h2>Dependency graph</h2><p class="qa-note">Each box is a step in the workflow, with the number of items the error reaches there. Hover a box for what went wrong.</p></div>
-        <div class="qa-seg" role="group" aria-label="Inspection strategy">
-          <button data-sb="Random sampling" aria-pressed="true">Random sampling</button>
-          <button data-sb="Risk-based" aria-pressed="false">Risk-based</button>
-        </div>
-      </div>
-      <div class="qa-legend"><span><i class="qa-sw" data-sw="System execution"></i>System execution</span><span><i class="qa-sw" data-sw="Reasoning"></i>Reasoning</span><span><i class="qa-sw" data-sw="Human review"></i>Human review</span></div>
-      <div class="qa-graphwrap"><div class="qa-graph dash-skeleton" data-draw="graph" data-source="snowball_nodes snowball_edges snowball_outcome"></div></div>
-    </div>
-  </section>
-
-  <!-- ============ METHOD ============ -->
-  <section class="qa-page" id="method" data-panel="method" hidden>
     <div class="qa-card">
       <h2>Risk priority number</h2>
       <p class="qa-formula">RPN = Severity × Likelihood × Detectability</p>
@@ -199,21 +280,38 @@
       <div class="qa-card"><h3>Detectability</h3><ol>
         <li>Control reliably catches it</li><li>Usually caught</li><li>Caught about half the time</li><li>Usually missed</li><li>Effectively invisible to the reviewer</li></ol></div>
     </div>
-    <div class="qa-def">
-      <div class="qa-card"><h3>Workflow areas</h3>
-        <p><b>Planning:</b> deciding what to do. Reading the intent, choosing scope, picking the tool.</p>
-        <p><b>Reasoning:</b> working with what came back. Arithmetic, interpretation, confidence, advice language.</p>
-        <p><b>System execution:</b> the tools and data themselves. Feeds, prices, entitlements, reconciliation.</p>
-        <p><b>Human review:</b> the oversight layer. Whether a reviewer catches what the agent got wrong.</p></div>
-      <div class="qa-card"><h3>Labels on every failure mode</h3>
-        <p>Severity, likelihood and detectability scores; workflow area; what it is (the expected failure); and evidence (the runs and trace behind the result).</p>
-        <p class="qa-note">Rows 2 and 4 of the likelihood and detectability scales are interpolated; the test suite defines only 1, 3 and 5.</p></div>
+    <p class="qa-note">Rows 2 and 4 of the likelihood and detectability scales are interpolated; the test suite defines only 1, 3 and 5.</p>
+    <div class="qa-card">
+      <h2>How the simulation works</h2>
+      <ol class="qa-steps">
+        <li><b>Errors are injected.</b> A share of agent answers carries an error. Each error is given an agent failure type from the suite, more often for types with a higher likelihood score.</li>
+        <li><b>Answers are selected for review.</b> Random sampling picks at random; risk-based review picks the highest guardrail risk scores. The risk score is itself an assumption: errors score higher than clean answers by an amount that depends on the error type, scaled by a strength parameter.</li>
+        <li><b>Reviewers review.</b> The reviewer model and review screen are identical for both strategies, and items are reviewed in shuffled order. A reviewer catches an error with the base catch rate, lowered by fatigue (a long run of clean items just reviewed), by load (more reviews a day than the team's capacity) and when the wrong answer looks plausible.</li>
+        <li><b>Repeat.</b> The whole process runs <b data-draw="metaVal" data-k="n_runs">—</b> times with a fixed random seed. Counts shown are whole-number averages; ranges are the middle 95% of runs.</li>
+      </ol>
+    </div>
+    <div class="qa-card">
+      <h2>Intervals</h2>
+      <p>Proportions measured from a sample (the daily quality estimate and the reviewer catch rates) use the <b>Wilson score interval</b>, not the normal (CLT) approximation. Wilson stays inside 0–100% and stays honest at small counts, such as 2 errors found in 40 answers. Simulation results show the middle 95% of simulated runs.</p>
+    </div>
+    <div class="qa-card">
+      <h2>Assumptions</h2>
+      <p class="qa-note">Every modelling choice in the generator (tools/generate_sample_data.py). All are illustrative until the experiment has run.</p>
+      <div class="qa-tablewrap">
+        <table>
+          <thead><tr><th>Name</th><th class="num">Value</th><th>Unit</th><th>What it means</th></tr></thead>
+          <tbody data-draw="assumptions"></tbody>
+        </table>
+      </div>
     </div>
   </section>
+
+  <footer class="qa-foot"><span class="qa-badge">Illustrative</span> Sample data, illustrative. <a href="lean/">One-page version</a></footer>
 </div>
 </main>
 <script src="lib/d3.min.js"></script>
-<script src="js/dash-shim.js"></script>
+<script src="js/dash-shim.js" data-datasets="risks sim_grid sim_meta snowball quality oversight"></script>
+<script src="js/shared.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
