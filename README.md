@@ -1,38 +1,76 @@
 # AI Oversight QA Dashboard
 
-Interactive dashboard for the capstone on human oversight of AI in wealth management. 
-**All numbers other than the severity, likelihood and detectability scores are synthesized and
+Interactive dashboard for the capstone on human oversight of AI in wealth management. It compares
+random sampling with risk-based review for catching high-impact errors from an AI advisor assistant.
+**All numbers other than the severity, likelihood and detectability scores are simulated and
 illustrative.** They will be replaced once the experiment has run.
+
+Two drafts share the same data, code and styles:
+
+| Draft | URL | What it is |
+|---|---|---|
+| A, lean | `lean/` | One page: verdict, four headline tiles, budget curve, misses by error type, snowball, quality over time |
+| B, full | `/` (root) | Seven tabs. The first, Summary, shows the same blocks as Draft A; the rest go deeper |
+
+Old links keep working: `#register` opens the Failure-mode register tab, `#strategies` the Strategy comparison.
 
 ## Run it
 
-- **On GitHub Pages:** Settings → Pages → Deploy from a branch → `main` / root. The site appears at `https://<your-username>.github.io/<repo>/`.
-- **Locally:** the page loads its data with `fetch`, so serve the folder rather than double-clicking
-  the file: `python3 -m http.server`, then open http://localhost:8000.
+- **On GitHub Pages:** Settings → Pages → Deploy from a branch → `main` / root. The full version is at
+  `https://<your-username>.github.io/<repo>/`, the lean one at `.../lean/`.
+- **Locally:** the pages load their data with `fetch`, so serve the folder rather than double-clicking
+  the file: `python3 -m http.server`, then open http://localhost:8000 (or /lean/).
 
 ## What is where
 
 | Path | What it is |
 |---|---|
-| `index.html` | Page structure and all fixed text (titles, notes, table headings) |
-| `styles.css` | Theme colors (light and dark, including the four risk-tier colors) and layout |
-| `js/app.js` | Charts, tables, tabs, the RPN thresholds (`THRESHOLDS`) |
-| `js/dash-shim.js` | Small helper that loads `data/*.json` and redraws charts when the tab or window changes |
-| `data/*.json` | The data behind every number and chart. Edit these to change the dashboard |
+| `index.html` | Draft B: tabs and all fixed text |
+| `lean/index.html` | Draft A: the one-page summary |
+| `styles.css` | Theme colors (light and dark) and layout, shared by both drafts |
+| `js/shared.js` | Shared by both drafts: formatting, Wilson intervals, sliders, verdict sentence, the Summary blocks |
+| `js/app.js` | Draft B only: register, strategy detail, snowball graph, reviewer reliability, method tab, tabs |
+| `js/dash-shim.js` | Loads `data/*.json` (listed in its script tag) and redraws on data, tab, slider or width change |
+| `data/*.json` | The data behind every number and chart, written by the generator |
 | `lib/d3.min.js` | d3 v7.9.0, included so the site works offline |
-| `tools/generate_sample_data.py` | Rebuilds `data/` from the test-suite workbook (repeatable, fixed random seed) |
+| `tools/generate_sample_data.py` | Rebuilds `data/` from the test-suite workbook (fixed random seed) |
+
+## Definitions
+
+- **High-impact error:** an injected error whose failure type has RPN ≥ `HIGH_IMPACT_RPN` (60, the
+  Critical tier). Change it in one place, the generator, then regenerate.
+- **Error type:** Reasoning, Planning or System execution, the step of the agent's workflow where
+  the failure starts. Human review is not an error type; it is the control layer.
+- **Errors missed:** never selected for review + reviewed but not caught.
+
+## The data
+
+`tools/generate_sample_data.py` runs a seeded Monte Carlo (500 runs) with three stages: errors are
+injected into agent answers, answers are selected for review (at random or by guardrail risk score),
+and reviewers review them. Both strategies use the same reviewer model: a base catch rate lowered by
+fatigue, load above team capacity, and plausible-looking answers. Every assumption is a named
+constant marked `ASSUMPTION` at the top of the file; the Method tab lists them all.
+
+| File | What it holds |
+|---|---|
+| `risks.json` | The test suite: scores, RPN, tier, error type or control layer, illustrative sample results |
+| `sim_grid.json` | Results for every review budget (2–30%) × reviewer catch rate (40–90%) × strategy; drives the sliders |
+| `sim_meta.json` | Definitions, defaults, team capacity, reviews needed to catch half, and the assumptions list |
+| `snowball.json` | Stale-price case: outcome per strategy, time series, dependency graph |
+| `quality.json` | 14 days of the random-review quality estimate, true rate, alert limit and alert day |
+| `oversight.json` | Reviewer catch rate by condition (illustrative) |
+
+Counts are whole-number means over the runs, with the middle 95% of runs as the range. Proportions
+measured from a sample use Wilson intervals (`wilson()` in `js/shared.js`), never the normal approximation.
 
 ## Editing
 
-- **Change a score, result or evidence text:** edit `data/risks.json`. Keep `rpn` and `tier` in step
-  with the scores: RPN = severity × likelihood × detectability; tiers are Critical ≥ 60, High ≥ 36,
-  Medium ≥ 18, Low below that. The GitHub web editor (press `.` on the repo page) is enough.
-- **Change thresholds or the max RPN:** `THRESHOLDS` and `MAX_RPN` near the top of the helpers
-  section in `js/app.js`.
-- **Change wording:** `index.html`.
-- **Regenerate the sample data:** `pip install openpyxl`, then
-  `python3 tools/generate_sample_data.py path/to/Sample_Test_Suite.xlsx data/`.
-
-`data/oversight.json` holds the reviewer-behaviour experiment sample. No tab shows it right now; it is
-kept in case that tab comes back.
-
+- **Change a score:** edit the workbook and regenerate, or edit `data/risks.json` (keep `rpn`,
+  `tier` and `high_impact` in step). Note that the simulation uses the workbook, so regenerate for it to
+  pick up score changes.
+- **Change an assumption or the high-impact threshold:** edit the constants at the top of the
+  generator, then regenerate.
+- **Change RPN tier thresholds:** `THRESHOLDS` in `js/shared.js` (the generator's `tier()` uses the same values).
+- **Change wording:** `index.html`, `lean/index.html`, and the summary text in `js/shared.js`.
+- **Regenerate the sample data** (needs `openpyxl`):
+  `python3 tools/generate_sample_data.py path/to/Sample_Test_Suite.xlsx data/`
