@@ -287,7 +287,8 @@ def simulate_strategies(agent: list[dict], rng: random.Random) -> tuple[list[dic
                    share_caught=share_summary(cau, inj))
         # make the integer means reconcile: caught + never_selected + reviewed_not_caught = injected
         out["missed"][0] = out["injected"][0] - out["caught"][0]
-        out["reviewed_not_caught"][0] = out["missed"][0] - out["never_selected"][0]
+        out["reviewed_not_caught"][0] = max(0, out["missed"][0] - out["never_selected"][0])
+        out["never_selected"][0] = out["missed"][0] - out["reviewed_not_caught"][0]
         return out
 
     cells = []
@@ -384,8 +385,12 @@ def simulate_snowball(rng: random.Random, risk_select_p: float) -> dict:
                  detection_kind="first catch (one-off fix)" if m == "Random sampling" else "root cause identified",
                  detected_share_of_runs=round(found / N_RUNS, 3),
                  root_cause_found=(m == "Risk-based"))
-        # reconcile integer means: reached + caught + blocked = affected
-        o["clients_reached"][0] = n_ans - o["caught"][0] - o["blocked"][0]
+        # reconcile integer means: reached + caught + blocked = affected. Clients reached is kept as
+        # simulated (it matches the end of the time series); the smaller term absorbs rounding.
+        if m == "Random sampling":
+            o["caught"][0] = n_ans - o["clients_reached"][0] - o["blocked"][0]
+        else:
+            o["blocked"][0] = n_ans - o["clients_reached"][0] - o["caught"][0]
         outcome.append(o)
     ts = []
     for gi, t in enumerate(grid):
@@ -393,9 +398,6 @@ def simulate_snowball(rng: random.Random, risk_select_p: float) -> dict:
         for m, key in [("Random sampling", "random"), ("Risk-based", "risk")]:
             row[key] = summarize(series[m][gi])
         ts.append(row)
-    # final point reconciles with the outcome table
-    ts[-1]["random"][0] = outcome[0]["clients_reached"][0]
-    ts[-1]["risk"][0] = outcome[1]["clients_reached"][0]
     nodes = [
         dict(node="nav", label="Vendor NAV feed", stage=0, area="System execution", affected=1, unit="fund", state="root", note="Growth fund NAV not updated from minute 0; prior close reused"),
         dict(node="cache", label="Price cache", stage=1, area="System execution", affected=1, unit="stale price", state="propagating", note="Stale price served with no as-of timestamp"),
