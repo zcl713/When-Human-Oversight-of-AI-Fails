@@ -1,0 +1,149 @@
+{
+ "days": [
+  {
+   "day": 1,
+   "reviewed": 40,
+   "errors_found": 2,
+   "errors_present": 3,
+   "estimate": 0.05,
+   "ci_lo": 0.0138,
+   "ci_hi": 0.165,
+   "true_rate": 0.065
+  },
+  {
+   "day": 2,
+   "reviewed": 40,
+   "errors_found": 0,
+   "errors_present": 0,
+   "estimate": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0876,
+   "true_rate": 0.065
+  },
+  {
+   "day": 3,
+   "reviewed": 40,
+   "errors_found": 1,
+   "errors_present": 3,
+   "estimate": 0.025,
+   "ci_lo": 0.0044,
+   "ci_hi": 0.1288,
+   "true_rate": 0.065
+  },
+  {
+   "day": 4,
+   "reviewed": 40,
+   "errors_found": 0,
+   "errors_present": 5,
+   "estimate": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0876,
+   "true_rate": 0.065
+  },
+  {
+   "day": 5,
+   "reviewed": 40,
+   "errors_found": 0,
+   "errors_present": 1,
+   "estimate": 0.0,
+   "ci_lo": 0.0,
+   "ci_hi": 0.0876,
+   "true_rate": 0.065
+  },
+  {
+   "day": 6,
+   "reviewed": 40,
+   "errors_found": 1,
+   "errors_present": 4,
+   "estimate": 0.025,
+   "ci_lo": 0.0044,
+   "ci_hi": 0.1288,
+   "true_rate": 0.065
+  },
+  {
+   "day": 7,
+   "reviewed": 40,
+   "errors_found": 4,
+   "errors_present": 6,
+   "estimate": 0.1,
+   "ci_lo": 0.0396,
+   "ci_hi": 0.2305,
+   "true_rate": 0.065
+  },
+  {
+   "day": 8,
+   "reviewed": 40,
+   "errors_found": 1,
+   "errors_present": 1,
+   "estimate": 0.025,
+   "ci_lo": 0.0044,
+   "ci_hi": 0.1288,
+   "true_rate": 0.065
+  },
+  {
+   "day": 9,
+   "reviewed": 40,
+   "errors_found": 1,
+   "errors_present": 3,
+   "estimate": 0.025,
+   "ci_lo": 0.0044,
+   "ci_hi": 0.1288,
+   "true_rate": 0.085
+  },
+  {
+   "day": 10,
+   "reviewed": 40,
+   "errors_found": 1,
+   "errors_present": 1,
+   "estimate": 0.025,
+   "ci_lo": 0.0044,
+   "ci_hi": 0.1288,
+   "true_rate": 0.105
+  },
+  {
+   "day": 11,
+   "reviewed": 40,
+   "errors_found": 1,
+   "errors_present": 1,
+   "estimate": 0.025,
+   "ci_lo": 0.0044,
+   "ci_hi": 0.1288,
+   "true_rate": 0.125
+  },
+  {
+   "day": 12,
+   "reviewed": 40,
+   "errors_found": 5,
+   "errors_present": 9,
+   "estimate": 0.125,
+   "ci_lo": 0.0546,
+   "ci_hi": 0.2611,
+   "true_rate": 0.145
+  },
+  {
+   "day": 13,
+   "reviewed": 40,
+   "errors_found": 8,
+   "errors_present": 14,
+   "estimate": 0.2,
+   "ci_lo": 0.105,
+   "ci_hi": 0.3476,
+   "true_rate": 0.165
+  },
+  {
+   "day": 14,
+   "reviewed": 40,
+   "errors_found": 4,
+   "errors_present": 11,
+   "estimate": 0.1,
+   "ci_lo": 0.0396,
+   "ci_hi": 0.2305,
+   "true_rate": 0.185
+  }
+ ],
+ "alert_limit": 0.08,
+ "alert_days": 2,
+ "drift_start_day": 9,
+ "alert_day": 13,
+ "illustrative": true
+}

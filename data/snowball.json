@@ -1,0 +1,629 @@
+{
+ "budget_pct": 10,
+ "catch_rate": 0.62,
+ "step_min": 15,
+ "risk_select_share": 0.8293,
+ "catch_prob": 0.341,
+ "outcome": [
+  {
+   "method": "Random sampling",
+   "affected": 268,
+   "households": 412,
+   "reviewed": [
+    27,
+    18,
+    36
+   ],
+   "caught": [
+    9,
+    4,
+    15
+   ],
+   "blocked": [
+    0,
+    0,
+    0
+   ],
+   "clients_reached": [
+    259,
+    253,
+    264
+   ],
+   "detection_min": 36,
+   "detection_kind": "first catch (one-off fix)",
+   "detected_share_of_runs": 1.0,
+   "root_cause_found": false
+  },
+  {
+   "method": "Risk-based",
+   "affected": 268,
+   "households": 412,
+   "reviewed": [
+    17,
+    10,
+    25
+   ],
+   "caught": [
+    6,
+    2,
+    11
+   ],
+   "blocked": [
+    248,
+    239,
+    255
+   ],
+   "clients_reached": [
+    14,
+    8,
+    23
+   ],
+   "detection_min": 36,
+   "detection_kind": "root cause identified",
+   "detected_share_of_runs": 1.0,
+   "root_cause_found": true
+  }
+ ],
+ "series": [
+  {
+   "t": 0,
+   "affected": 0,
+   "random": [
+    0,
+    0,
+    0
+   ],
+   "risk": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "t": 15,
+   "affected": 8,
+   "random": [
+    8,
+    3,
+    14
+   ],
+   "risk": [
+    6,
+    2,
+    11
+   ]
+  },
+  {
+   "t": 30,
+   "affected": 17,
+   "random": [
+    16,
+    8,
+    25
+   ],
+   "risk": [
+    12,
+    6,
+    20
+   ]
+  },
+  {
+   "t": 45,
+   "affected": 25,
+   "random": [
+    24,
+    15,
+    35
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 60,
+   "affected": 34,
+   "random": [
+    32,
+    21,
+    44
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 75,
+   "affected": 42,
+   "random": [
+    41,
+    30,
+    52
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 90,
+   "affected": 50,
+   "random": [
+    49,
+    37,
+    61
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 105,
+   "affected": 59,
+   "random": [
+    57,
+    45,
+    70
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 120,
+   "affected": 67,
+   "random": [
+    65,
+    52,
+    79
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 135,
+   "affected": 76,
+   "random": [
+    73,
+    60,
+    88
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 150,
+   "affected": 84,
+   "random": [
+    81,
+    67,
+    97
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 165,
+   "affected": 92,
+   "random": [
+    89,
+    76,
+    104
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 180,
+   "affected": 101,
+   "random": [
+    97,
+    83,
+    112
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 195,
+   "affected": 109,
+   "random": [
+    105,
+    91,
+    121
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 210,
+   "affected": 117,
+   "random": [
+    113,
+    98,
+    129
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 225,
+   "affected": 126,
+   "random": [
+    121,
+    107,
+    137
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 240,
+   "affected": 134,
+   "random": [
+    130,
+    113,
+    146
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 255,
+   "affected": 143,
+   "random": [
+    138,
+    122,
+    154
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 270,
+   "affected": 151,
+   "random": [
+    146,
+    129,
+    164
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 285,
+   "affected": 159,
+   "random": [
+    154,
+    137,
+    171
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 300,
+   "affected": 167,
+   "random": [
+    162,
+    146,
+    179
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 315,
+   "affected": 176,
+   "random": [
+    170,
+    154,
+    186
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 330,
+   "affected": 184,
+   "random": [
+    178,
+    163,
+    193
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 345,
+   "affected": 193,
+   "random": [
+    186,
+    172,
+    201
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 360,
+   "affected": 201,
+   "random": [
+    194,
+    180,
+    208
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 375,
+   "affected": 210,
+   "random": [
+    202,
+    189,
+    216
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 390,
+   "affected": 218,
+   "random": [
+    210,
+    196,
+    223
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 405,
+   "affected": 226,
+   "random": [
+    218,
+    206,
+    231
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 420,
+   "affected": 235,
+   "random": [
+    227,
+    214,
+    239
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 435,
+   "affected": 243,
+   "random": [
+    235,
+    224,
+    245
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 450,
+   "affected": 251,
+   "random": [
+    243,
+    234,
+    252
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 465,
+   "affected": 259,
+   "random": [
+    251,
+    242,
+    259
+   ],
+   "risk": [
+    15,
+    8,
+    23
+   ]
+  },
+  {
+   "t": 480,
+   "affected": 268,
+   "random": [
+    259,
+    253,
+    264
+   ],
+   "risk": [
+    14,
+    8,
+    23
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "node": "nav",
+   "label": "Vendor NAV feed",
+   "stage": 0,
+   "area": "System execution",
+   "affected": 1,
+   "unit": "fund",
+   "state": "root",
+   "note": "Growth fund NAV not updated from minute 0; prior close reused"
+  },
+  {
+   "node": "cache",
+   "label": "Price cache",
+   "stage": 1,
+   "area": "System execution",
+   "affected": 1,
+   "unit": "stale price",
+   "state": "propagating",
+   "note": "Stale price served with no as-of timestamp"
+  },
+  {
+   "node": "hold",
+   "label": "Holdings join",
+   "stage": 2,
+   "area": "System execution",
+   "affected": 412,
+   "unit": "households hold it",
+   "state": "propagating",
+   "note": "412 households hold the fund"
+  },
+  {
+   "node": "calc",
+   "label": "Impact calculator",
+   "stage": 3,
+   "area": "Reasoning",
+   "affected": 268,
+   "unit": "answers that day",
+   "state": "propagating",
+   "note": "Fund shown as flat; loss understated"
+  },
+  {
+   "node": "answer",
+   "label": "Agent answer",
+   "stage": 4,
+   "area": "Reasoning",
+   "affected": 268,
+   "unit": "answers",
+   "state": "propagating",
+   "note": "'-1.6%, no action needed' reads as plausible"
+  },
+  {
+   "node": "review",
+   "label": "Human review",
+   "stage": 5,
+   "area": "Control layer (human review)",
+   "affected": 268,
+   "unit": "answers",
+   "state": "control",
+   "note": "Control layer: the reviewer checks the number, not its base or freshness"
+  },
+  {
+   "node": "client",
+   "label": "Sent to clients",
+   "stage": 6,
+   "area": "Control layer (human review)",
+   "affected": null,
+   "unit": "clients reached",
+   "state": "harm",
+   "note": "Answers not caught and not blocked"
+  }
+ ],
+ "edges": [
+  {
+   "source": "nav",
+   "target": "cache"
+  },
+  {
+   "source": "cache",
+   "target": "hold"
+  },
+  {
+   "source": "hold",
+   "target": "calc"
+  },
+  {
+   "source": "calc",
+   "target": "answer"
+  },
+  {
+   "source": "answer",
+   "target": "review"
+  },
+  {
+   "source": "review",
+   "target": "client"
+  }
+ ]
+}
