@@ -8,6 +8,9 @@
  *
  * Definitions such as the high-impact threshold come from data/sim_meta.json, which the generator
  * writes (tools/generate_sample_data.py). Nothing here hard-codes a result.
+ *
+ * Percentages: every displayed percentage is a displayed integer count / the displayed denominator
+ * (share()). Plotted curves may use unrounded means; text quoting them uses the counts.
  */
 
 /* ---------- formatting ---------- */
@@ -15,6 +18,8 @@ const pct = d3.format('.0%');
 const pct1 = d3.format('.1%');
 const num1 = d3.format(',.1f');
 const intf = d3.format(',');
+/** The one way to show a percentage of counts: displayed count / displayed denominator. */
+function share(count, den) { return den ? pct(count / den) : '—'; }
 const METHODS = ['Random sampling', 'Risk-based'];
 const ERROR_TYPES = ['Reasoning', 'Planning', 'System execution'];
 
@@ -41,7 +46,8 @@ function rangeText(t, unit = '') {
 const TIER_FILL = {Critical: 'var(--tier-critical)', High: 'var(--tier-high)', Medium: 'var(--tier-medium)', Low: 'var(--tier-low)'};
 const METHOD_FILL = {'Risk-based': 'var(--series-1)', 'Random sampling': 'var(--cds-chart-muted)'};
 const METHOD_DASH = {'Risk-based': null, 'Random sampling': '6 4'};
-const OUTCOME_FILL = {caught: 'var(--series-1)', reviewed_not_caught: 'var(--series-4)', never_selected: 'var(--cds-chart-muted)'};
+const OUTCOME_FILL = {caught: 'var(--outcome-caught)', reviewed_not_caught: 'var(--outcome-rnc)', never_selected: 'var(--outcome-never)'};
+const OUTCOME_SW = {caught: 'o-caught', reviewed_not_caught: 'o-rnc', never_selected: 'o-never'};
 const OUTCOME_LABEL = {caught: 'Caught', reviewed_not_caught: 'Reviewed but not caught', never_selected: 'Never selected for review'};
 const AREA_FILL = {'System execution': 'var(--series-1)', 'Reasoning': 'var(--series-2)', 'Planning': 'var(--series-3)', 'Control layer (human review)': 'var(--series-4)'};
 
@@ -174,26 +180,27 @@ dash.draw('verdict', (el) => {
   done(el);
   const n = c.risk.hi.injected[0], rk = c.risk.hi.caught[0], rr = c.random.hi.caught[0];
   const most = c.risk.hi.missed[0] > n / 2 ? 'both miss most' : 'risk-based misses fewer than half';
-  el.textContent = `At a ${c.budget}% review budget, risk-based review catches ${rk} of ${n} high-impact errors versus ${rr} for random sampling; ${most}.`;
+  el.textContent = `At a ${c.budget}% review budget, risk-based review catches ${share(rk, n)} of high-impact errors versus ${share(rr, n)} for random sampling; ${most}.`;
 });
 
 /* ---------- headline tiles ---------- */
 const TILE = {
-  caught: (cell) => ({v: cell.hi.caught[0], r: rangeText(cell.hi.caught)}),
-  missed: (cell) => ({v: cell.hi.missed[0], r: `${cell.hi.never_selected[0]} never selected, ${cell.hi.reviewed_not_caught[0]} reviewed but not caught · ${rangeText(cell.hi.missed)}`}),
-  effort: (cell) => ({v: cell.minutes_per_hi_caught[0], r: rangeText(cell.minutes_per_hi_caught, ' min')}),
+  caught: (cell) => ({v: cell.hi.caught[0], p: share(cell.hi.caught[0], cell.hi.injected[0]), r: rangeText(cell.hi.caught)}),
+  missed: (cell) => ({v: cell.hi.missed[0], p: share(cell.hi.missed[0], cell.hi.injected[0]), r: `${cell.hi.never_selected[0]} never selected, ${cell.hi.reviewed_not_caught[0]} reviewed but not caught · ${rangeText(cell.hi.missed)}`}),
+  effort: (cell) => ({v: cell.minutes_per_hi_caught[0], p: '', r: rangeText(cell.minutes_per_hi_caught, ' min')}),
 };
 dash.draw('tile', (el) => {
   const c = current(); if (!c) return;
   const method = el.dataset.m, cell = method === 'Risk-based' ? c.risk : c.random;
-  let v, r;
+  let v, p, r;
   if (el.dataset.tile === 'snowball') {
     const sb = rowsOf('snowball'); if (!sb) return;
     const o = sb.outcome.find((x) => x.method === method);
-    v = o.clients_reached[0]; r = rangeText(o.clients_reached);
-  } else ({v, r} = TILE[el.dataset.tile](cell));
+    v = o.clients_reached[0]; p = share(v, o.affected); r = rangeText(o.clients_reached);
+  } else ({v, p, r} = TILE[el.dataset.tile](cell));
   done(el);
   el.querySelector('.v').textContent = v == null ? '—' : intf(v);
+  el.querySelector('.p').textContent = p;
   el.querySelector('.r').textContent = r;
   el.title = `${method}: ${r}`;
 });
@@ -260,16 +267,18 @@ dash.draw('curve', (el) => {
       const [mx] = d3.pointer(e); const b = Math.round(Math.max(x.domain()[0], Math.min(x.domain()[1], x.invert(mx))));
       series.forEach((sr, i) => { const p = sr.pts.find((q) => q.budget === b); dots[i].attr('cx', x(b)).attr('cy', y(p.v)).style('display', null); });
       tip.show(e, `Review ${b}% of answers (${Math.round(m.outputs_per_day * b / 100)} a day)`, series.map((sr) => { const p = sr.pts.find((q) => q.budget === b);
-        return [sr.color, `${sr.name}: ${pct(p.v)} (${p.caught[0]} of ${p.n}; 95% range ${pct(p.lo)}–${pct(p.hi)})`]; }));
+        return [sr.color, `${sr.name}: ${share(p.caught[0], p.n)} (${p.caught[0]} of ${p.n}; 95% range ${pct(p.lo)}–${pct(p.hi)})`]; }));
     })
     .on('mouseleave', () => { tip.hide(); dots.forEach((d) => d.style('display', 'none')); });
   const at = (name) => series.find((q) => q.name === name).pts.find((q) => q.budget === s.budget);
-  const peak = series[0].pts.reduce((a, b) => (b.v > a.v ? b : a));
-  setSummary(el, `At ${s.budget}% budget, risk-based review catches ${pct(at('Risk-based').v)} of high-impact errors and random sampling ${pct(at('Random sampling').v)}. ` +
-    `Risk-based review peaks at ${pct(peak.v)} near ${peak.budget}%; above the team's capacity of ${m.team_capacity} reviews a day (${num1(capB)}% budget) each review gets less careful, so more budget stops helping. Shaded bands are the middle 95% of ${m.n_runs} simulated runs.`);
+  const peak = series[0].pts.reduce((a, b) => (b.caught[0] > a.caught[0] ? b : a));
+  const atS = (name) => { const p = at(name); return `${share(p.caught[0], p.n)} (${p.caught[0]} of ${p.n})`; };
+  setSummary(el, `At ${s.budget}% budget, risk-based review catches ${atS('Risk-based')} of high-impact errors and random sampling ${atS('Random sampling')}. ` +
+    `Risk-based review peaks at ${share(peak.caught[0], peak.n)} (${peak.caught[0]} of ${peak.n}) near ${peak.budget}%; above the team's capacity of ${m.team_capacity} reviews a day (${num1(capB)}% budget) each review gets less careful, so more budget stops helping. Shaded bands are the middle 95% of ${m.n_runs} simulated runs.`);
 });
 
 /* ---------- misses by error type ---------- */
+let hatchSeq = 0;
 dash.draw('byType', (el) => {
   const c = current(); el.replaceChildren(); if (!c) return; done(el);
   const ws = weakSpot(c.risk);
@@ -280,15 +289,21 @@ dash.draw('byType', (el) => {
   const svg = svgFor(el, W, H, 'Stacked bar chart: high-impact errors by error type, split into caught, reviewed but not caught, and never selected, for each strategy');
   const left = Math.ceil(textWidth(svg, METHODS, 12)) + 10;
   const right = Math.ceil(textWidth(svg, ['missed 00 of 00'], 12)) + 10;
+  // diagonal hatch for "reviewed, not caught" (id unique per drawing: hidden tabs keep their SVGs)
+  const hatchId = `qa-hatch-${++hatchSeq}`;
+  const pat = svg.append('defs').append('pattern').attr('id', hatchId).attr('patternUnits', 'userSpaceOnUse').attr('width', 6).attr('height', 6).attr('patternTransform', 'rotate(45)');
+  pat.append('rect').attr('width', 6).attr('height', 6).style('fill', OUTCOME_FILL.reviewed_not_caught);
+  pat.append('line').attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 6).style('stroke', 'var(--outcome-hatch)').attr('stroke-width', 2.5);
+  const segFill = (sg) => (sg === 'reviewed_not_caught' ? `url(#${hatchId})` : OUTCOME_FILL[sg]);
   const maxN = d3.max(ERROR_TYPES, (t) => c.risk.by_type[t].hi.injected[0]) || 1;
   const x = d3.scaleLinear([0, maxN], [left, W - right]);
   const tip = tipFor(el);
   ERROR_TYPES.forEach((t, gi) => {
     const gy = gi * (groupH + groupGap);
     const isWeak = t === ws.type;
-    if (isWeak) svg.append('rect').attr('x', 0.5).attr('y', gy - 4).attr('width', W - 1).attr('height', groupH + 8).attr('rx', 6).style('fill', 'none').style('stroke', 'var(--color-bad)').attr('stroke-width', 1.5);
+    if (isWeak) svg.append('rect').attr('x', 0.5).attr('y', gy - 4).attr('width', W - 1).attr('height', groupH + 8).attr('rx', 6).style('fill', 'none').style('stroke', 'var(--color-weak)').attr('stroke-width', 1.5);
     const head = svg.append('text').attr('x', 6).attr('y', gy + 14).attr('font-size', 13).attr('font-weight', 600).text(t);
-    if (isWeak) head.append('tspan').style('fill', 'var(--color-bad)').attr('font-weight', 600).text('  ⚠ Weak spot');
+    if (isWeak) head.append('tspan').style('fill', 'var(--color-weak)').attr('font-weight', 600).text('  ⚠ Weak spot');
     METHODS.forEach((mth, mi) => {
       const b = (mth === 'Risk-based' ? c.risk : c.random).by_type[t].hi;
       const yy = gy + headH + mi * (barH + gap);
@@ -296,7 +311,7 @@ dash.draw('byType', (el) => {
       let acc = 0;
       segs.forEach((sg) => {
         const v = b[sg][0]; if (!v) return;
-        svg.append('rect').attr('class', 'grow').attr('x', x(acc)).attr('y', yy).attr('width', Math.max(0, x(acc + v) - x(acc) - 2)).attr('height', barH).attr('rx', 3).style('fill', OUTCOME_FILL[sg])
+        svg.append('rect').attr('class', 'grow').attr('x', x(acc)).attr('y', yy).attr('width', Math.max(0, x(acc + v) - x(acc) - 2)).attr('height', barH).attr('rx', 3).style('fill', segFill(sg))
           .on('mousemove', (e) => tip.show(e, `${t} · ${mth}`, segs.map((q) => [OUTCOME_FILL[q], `${OUTCOME_LABEL[q]}: ${b[q][0]} (${rangeText(b[q])})`]))).on('mouseleave', () => tip.hide());
         acc += v;
       });
@@ -309,6 +324,11 @@ dash.draw('byType', (el) => {
 });
 
 /* ---------- snowball over time ---------- */
+/** Minutes after which both strategies act (the mean of their medians, which the generator keeps close). */
+function actMinutes(sb) {
+  const t = sb.outcome.map((o) => o.detection_min).filter((v) => v != null);
+  return t.length ? Math.round(d3.mean(t)) : null;
+}
 function clock(min) { const h = Math.floor(min / 60), m = Math.round(min % 60); return `${h}h${m ? String(m).padStart(2, '0') : ''}`; }
 dash.draw('snowTime', (el) => {
   if (failed('snowball')) return showFail(el);
@@ -335,15 +355,14 @@ dash.draw('snowTime', (el) => {
     svg.append('path').datum(ts).attr('d', d3.line().x((d) => x(d.t)).y((d) => y(l.get(d)))).style('fill', 'none').style('stroke', l.color).attr('stroke-width', l.width).attr('stroke-dasharray', l.dash);
   });
   const oR = sb.outcome.find((o) => o.method === 'Random sampling'), oK = sb.outcome.find((o) => o.method === 'Risk-based');
-  const marks = [
-    {t: oK.detection_min, text: `risk-based: root cause found, feed blocked (${clock(oK.detection_min)})`, color: METHOD_FILL['Risk-based']},
-    {t: oR.detection_min, text: `random: first catch, fixed as a one-off (${clock(oR.detection_min)})`, color: METHOD_FILL['Random sampling']},
-  ];
-  marks.forEach((mk, i) => {
-    if (mk.t == null) return;
-    svg.append('line').attr('x1', x(mk.t)).attr('x2', x(mk.t)).attr('y1', top).attr('y2', H - bottom).style('stroke', mk.color).attr('stroke-dasharray', '3 3');
-    svg.append('text').attr('x', x(mk.t) + 6).attr('y', top + 10 + i * 15).attr('font-size', 11).text(W < 480 ? mk.text.split(':')[0] + ` (${clock(mk.t)})` : mk.text);
-  });
+  // Both strategies act at about the same time; only risk-based finds the root cause. One marker.
+  const tAct = actMinutes(sb);
+  if (tAct != null) {
+    svg.append('line').attr('x1', x(tAct)).attr('x2', x(tAct)).attr('y1', top).attr('y2', H - bottom).style('stroke', 'var(--color-fg-muted)').attr('stroke-dasharray', '3 3');
+    const notes = W < 480 ? [`both act ≈${clock(tAct)}`, 'only risk-based blocks the feed']
+      : [`both strategies act at about ${clock(tAct)}`, 'only risk-based review finds the root cause and blocks later answers'];
+    notes.forEach((t, i) => svg.append('text').attr('class', 'halo').attr('x', x(tAct) + 6).attr('y', top + 10 + i * 15).attr('font-size', 11).text(t));
+  }
   if (W >= 480) {
     const last = ts[ts.length - 1];
     const ends = lines.map((l) => ({y: y(l.get(last)), text: `${l.name} ${intf(l.get(last))}`}));
@@ -359,20 +378,36 @@ dash.draw('snowTime', (el) => {
         [METHOD_FILL['Random sampling'], `Random: ${intf(d.random[0])} reached clients (${rangeText(d.random)})`],
         [METHOD_FILL['Risk-based'], `Risk-based: ${intf(d.risk[0])} reached clients (${rangeText(d.risk)})`]]);
     }).on('mouseleave', () => tip.hide());
-  setSummary(el, `Over one trading day, ${intf(oR.affected)} answers used the stale price. Random sampling caught ${oR.caught[0]} of them one at a time and never found the shared cause, so ${intf(oR.clients_reached[0])} reached clients. ` +
-    `Risk-based review saw the freshness flags cluster on one fund, traced them to the feed after about ${oK.detection_min} minutes and blocked ${intf(oK.blocked[0])} later answers, so ${intf(oK.clients_reached[0])} reached clients.`);
+  setSummary(el, `Over one trading day, ${intf(oR.affected)} answers used the stale price. Both strategies act at about ${tAct} minutes. ` +
+    `Random sampling fixes each caught answer as a one-off (${oR.caught[0]} caught) and never finds the shared cause, so ${intf(oR.clients_reached[0])} of ${intf(oR.affected)} (${share(oR.clients_reached[0], oR.affected)}) reached clients. ` +
+    `Only risk-based review identifies the root cause and blocks later answers (${intf(oK.blocked[0])} blocked), so ${intf(oK.clients_reached[0])} of ${intf(oK.affected)} (${share(oK.clients_reached[0], oK.affected)}) reached clients.`);
 });
 
 /* ---------- quality over time ---------- */
+/* Main marker and line: the estimate corrected for reviewer misses (sensitivity measured on seeded
+   canaries), with its 95% interval. Hollow dot: the raw observed rate. */
+dash.draw('qVal', (el) => { const q = rowsOf('quality'); if (q) el.textContent = intf(q[el.dataset.k]); });
+function alertSentence(q) {
+  const lim = pct(q.alert_limit), early = q.alerts.filter((d) => d < q.drift_start_day);
+  const parts = [];
+  if (early.length) parts.push(`The corrected estimate stays above the ${lim} limit for ${q.alert_days} days in a row by day ${early[0]}, before drift begins: a false alarm while few canaries have been seen.`);
+  if (q.drift_alert_day) parts.push(`After drift starts on day ${q.drift_start_day} it alerts on day ${q.drift_alert_day}, ${q.drift_alert_day - q.drift_start_day} days later.`);
+  else {
+    const over = q.days.filter((d) => d.day >= q.drift_start_day && d.corrected > q.alert_limit).map((d) => d.day);
+    parts.push(`After drift starts on day ${q.drift_start_day}, the corrected estimate is above the limit on ${over.length ? 'day' + (over.length > 1 ? 's ' : ' ') + over.join(', ') : 'no day'} but not ${q.alert_days} days in a row, so the drift is not alerted within the window.`);
+  }
+  return parts.join(' ');
+}
 dash.draw('quality', (el) => {
   if (failed('quality')) return showFail(el);
   const q = rowsOf('quality'); el.replaceChildren(); if (!q) return; done(el);
-  const days = q.days.map((d) => { const [lo, hi] = wilson(d.errors_found, d.reviewed); return {...d, lo, hi}; });
+  const days = q.days;
   const W = el.clientWidth, H = el.classList.contains('tall') ? 300 : 250, top = 16, bottom = 30;
-  const svg = svgFor(el, W, H, 'Chart: daily estimated error rate with 95% Wilson intervals, the true error rate, and the alert limit');
-  const ymax = Math.ceil(Math.max(d3.max(days, (d) => d.hi), d3.max(days, (d) => d.true_rate)) * 10) / 10;
+  const svg = svgFor(el, W, H, 'Chart: daily error rate corrected for reviewer misses with 95% intervals, the raw observed rate, the true error rate, and the alert limit');
+  const ymax = Math.ceil(Math.max(d3.max(days, (d) => d.corrected_hi), d3.max(days, (d) => d.true_rate)) * 10) / 10;
   const left = Math.ceil(textWidth(svg, [pct(ymax)], 11)) + 10;
-  const right = W < 480 ? 12 : Math.ceil(textWidth(svg, ['True error rate'], 12)) + 14;
+  const labels = ['Corrected estimate', 'True error rate', 'Raw rate'];
+  const right = W < 480 ? 12 : Math.ceil(textWidth(svg, labels, 12)) + 14;
   fallbackLegend(el, W < 480);
   const x = d3.scaleLinear([0.5, days.length + 0.5], [left, W - right]);
   const y = d3.scaleLinear([0, ymax], [H - bottom, top]);
@@ -381,57 +416,79 @@ dash.draw('quality', (el) => {
   axisStyle(svg.append('g').attr('transform', `translate(0,${H - bottom})`).call(d3.axisBottom(x).tickValues(days.map((d) => d.day)).tickFormat((d) => (W >= 600 ? 'Day ' + d : String(d))).tickSize(0).tickPadding(8)));
   axisStyle(svg.append('g').attr('transform', `translate(${left},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(pct).tickSize(-(W - right - left))));
   svg.append('line').attr('x1', left).attr('x2', W - right).attr('y1', y(q.alert_limit)).attr('y2', y(q.alert_limit)).style('stroke', 'var(--color-bad)').attr('stroke-dasharray', '5 3').attr('stroke-width', 1.5);
-  svg.append('text').attr('x', left + 4).attr('y', y(q.alert_limit) - 5).attr('font-size', 11).style('fill', 'var(--color-bad)').text(`alert limit ${pct(q.alert_limit)}`);
+  svg.append('text').attr('x', left + 4).attr('y', y(q.alert_limit) - 5).attr('font-size', 11).style('fill', 'var(--color-bad)').attr('class', 'halo').text(`alert limit ${pct(q.alert_limit)}`);
   svg.append('path').datum(days).attr('d', d3.line().x((d) => x(d.day)).y((d) => y(d.true_rate))).style('fill', 'none').style('stroke', 'var(--color-fg)').attr('stroke-width', 1.5).attr('stroke-dasharray', '6 4');
+  days.forEach((d) => svg.append('line').attr('x1', x(d.day)).attr('x2', x(d.day)).attr('y1', y(d.corrected_lo)).attr('y2', y(d.corrected_hi)).style('stroke', 'var(--series-1)').attr('stroke-width', 2).attr('stroke-opacity', 0.45));
+  svg.append('path').datum(days).attr('d', d3.line().x((d) => x(d.day)).y((d) => y(d.corrected))).style('fill', 'none').style('stroke', 'var(--series-1)').attr('stroke-width', 2);
   days.forEach((d) => {
-    svg.append('line').attr('x1', x(d.day)).attr('x2', x(d.day)).attr('y1', y(d.lo)).attr('y2', y(d.hi)).style('stroke', 'var(--series-1)').attr('stroke-width', 2).attr('stroke-opacity', 0.45);
-    svg.append('circle').attr('cx', x(d.day)).attr('cy', y(d.estimate)).attr('r', 4.5).style('fill', 'var(--series-1)').style('stroke', 'var(--color-panel)').attr('stroke-width', 1.5);
+    svg.append('circle').attr('cx', x(d.day) + 7).attr('cy', y(d.raw_rate)).attr('r', 3).style('fill', 'var(--color-panel)').style('stroke', 'var(--color-fg-muted)').attr('stroke-width', 1.25);
+    svg.append('circle').attr('cx', x(d.day)).attr('cy', y(d.corrected)).attr('r', 4.5).style('fill', 'var(--series-1)').style('stroke', 'var(--color-panel)').attr('stroke-width', 1.5);
   });
-  if (q.alert_day) {
-    svg.append('line').attr('x1', x(q.alert_day)).attr('x2', x(q.alert_day)).attr('y1', top).attr('y2', H - bottom).style('stroke', 'var(--color-bad)').attr('stroke-width', 1.5);
-    svg.append('text').attr('x', x(q.alert_day) - 4).attr('y', top + 30).attr('text-anchor', 'end').attr('font-size', 11).attr('font-weight', 600).style('fill', 'var(--color-bad)').text(`⚠ alert, day ${q.alert_day}`);
-  }
+  q.alerts.forEach((day, i) => {
+    svg.append('line').attr('x1', x(day)).attr('x2', x(day)).attr('y1', top).attr('y2', H - bottom).style('stroke', 'var(--color-bad)').attr('stroke-width', 1.5);
+    const before = x(day) > left + 90;
+    svg.append('text').attr('x', before ? x(day) - 4 : x(day) + 4).attr('y', top + 30 + i * 14).attr('text-anchor', before ? 'end' : 'start').attr('font-size', 11).attr('font-weight', 600).style('fill', 'var(--color-bad)').attr('class', 'halo').text(`⚠ alert, day ${day}`);
+  });
   if (W >= 480) {
     const last = days[days.length - 1];
-    svg.append('text').attr('x', W - right + 8).attr('y', y(last.true_rate)).attr('dy', '0.35em').attr('font-size', 12).text('True error rate');
-    svg.append('text').attr('x', W - right + 8).attr('y', Math.min(H - bottom - 4, Math.max(y(last.estimate), y(last.true_rate) + 16))).attr('dy', '0.35em').attr('font-size', 12).text('Estimate');
+    const ends = [{y: y(last.corrected), text: 'Corrected estimate'}, {y: y(last.true_rate), text: 'True error rate'}, {y: y(last.raw_rate), text: 'Raw rate'}];
+    ends.sort((a, b) => a.y - b.y); for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 15) ends[i].y = ends[i - 1].y + 15;
+    ends.forEach((e) => svg.append('text').attr('x', W - right + 8).attr('y', e.y).attr('dy', '0.35em').attr('font-size', 12).text(e.text));
   }
   const tip = tipFor(el);
   svg.append('rect').attr('x', left).attr('y', top).attr('width', W - right - left).attr('height', H - bottom - top).style('fill', 'transparent')
     .on('mousemove', (e) => {
       const [mx] = d3.pointer(e); const d = days[Math.max(0, Math.min(days.length - 1, Math.round(x.invert(mx)) - 1))];
-      tip.show(e, `Day ${d.day}`, [[ 'var(--series-1)', `Estimate ${pct1(d.estimate)} (${d.errors_found} of ${d.reviewed}); 95% Wilson ${pct1(d.lo)}–${pct1(d.hi)}`], [null, `True rate ${pct1(d.true_rate)}`]]);
+      tip.show(e, `Day ${d.day}`, [
+        ['var(--series-1)', `Corrected ${pct1(d.corrected)} (95% interval ${pct1(d.corrected_lo)}–${pct1(d.corrected_hi)})`],
+        [null, `Raw: ${d.errors_found} of ${d.reviewed} = ${pct1(d.errors_found / d.reviewed)}`],
+        [null, `Canaries caught: ${d.canaries_caught} of ${d.canaries_seen} to date (${share(d.canaries_caught, d.canaries_seen)})`],
+        [null, `True rate ${pct1(d.true_rate)}`]]);
     }).on('mouseleave', () => tip.hide());
-  const base = days[0];
-  setSummary(el, `Each day ${base.reviewed} randomly chosen answers are reviewed to estimate the error rate. The true rate rises from day ${q.drift_start_day}; ` +
-    (q.alert_day ? `the estimate stays above the ${pct(q.alert_limit)} alert limit for ${q.alert_days} days in a row and raises an alert on day ${q.alert_day}, ${q.alert_day - q.drift_start_day} days after drift began. ` : 'no alert fires within the window. ') +
-    'The estimate sits below the true rate because reviewers miss some errors, and its intervals are wide because the daily sample is small.');
+  const last = days[days.length - 1];
+  setSummary(el, `Each day ${q.slice} answers are reviewed at random; ${q.canary_per_day} of them are seeded known errors (canaries). ` +
+    `The estimate is corrected for reviewer misses: the error rate in the other ${q.real_per_day} reviews divided by the share of canaries caught so far (${last.canaries_caught} of ${last.canaries_seen}, ${share(last.canaries_caught, last.canaries_seen)}, by day ${last.day}). ` +
+    `The true rate rises from day ${q.drift_start_day}. ${alertSentence(q)} Early-day intervals are wide because few canaries have been seen.`);
 });
+dash.draw('qualityTable', (el) => {
+  const q = rowsOf('quality'); el.replaceChildren(); if (!q) return;
+  q.days.forEach((d) => {
+    const status = q.alerts.includes(d.day) ? (d.day < q.drift_start_day ? '⚠ Alert (before drift)' : '⚠ Alert') : d.corrected > q.alert_limit ? 'Above limit' : '';
+    const tr = document.createElement('tr');
+    tr.append(td(String(d.day), 'num'), td(intf(d.reviewed), 'num'), td(intf(d.errors_found), 'num'), td(pct1(d.errors_found / d.reviewed), 'num'),
+      td(`${d.canaries_caught} / ${d.canaries_seen}`, 'num'), td(pct1(d.corrected), 'num'), td(`${pct1(d.corrected_lo)}–${pct1(d.corrected_hi)}`, 'num'), td(pct1(d.true_rate), 'num'), td(status));
+    el.appendChild(tr);
+  });
+});
+const QUALITY_HEAD = '<thead><tr><th class="num">Day</th><th class="num">Reviewed</th><th class="num">Errors found</th><th class="num">Raw rate</th><th class="num">Canaries caught / seen (to date)</th><th class="num">Corrected estimate</th><th class="num">95% interval</th><th class="num">True rate</th><th>Status</th></tr></thead>';
 
 /* ---------- the Summary markup (static text only; every number is filled in by the draws above) ---------- */
 /** "i" button that opens the method and caveat text for one chart. */
 function infoHTML(title, html) {
   return `<details class="qa-info"><summary aria-label="How to read this: ${title}" title="How to read this">i</summary><div class="qa-info-pop">${html}</div></details>`;
 }
+const QUALITY_INFO = `<p>Each day <b data-draw="qVal" data-k="slice">—</b> answers are reviewed at random. <b data-draw="qVal" data-k="canary_per_day">—</b> of them are seeded known errors (canaries), drawn from the same error mix and reviewed the same way, so reviewers cannot tell them apart.</p>
+    <p>The estimate is corrected for reviewer misses: the error rate in the other <b data-draw="qVal" data-k="real_per_day">—</b> reviews divided by the share of canaries caught so far, capped at 100%. Lines are 95% intervals; early-day intervals are wide because few canaries have been seen. Hollow dots are the raw observed rate.</p>
+    <p>Trade-off: this many canaries is more than the suite's 1 in 50, so the reviewer catch rate can be estimated, but fewer real answers get reviewed.</p>
+    <p>An alert fires when the corrected estimate stays above the limit <b data-draw="qVal" data-k="alert_days">—</b> days in a row. The dashed line is the true error rate, known only in the simulation.</p>`;
 const SUMMARY_INFO = {
   curve: `<p>Share of injected high-impact errors that reviewers catch. High-impact means <b data-draw="hiRuleText">—</b>.</p>
     <p>Bands show the middle 95% of simulated runs; the vertical line marks the budget set above.</p>
     <p>The thin dotted line is the team's daily capacity; past it, reviews get less careful, so more budget stops helping.</p>`,
   byType: `<p>Each bar splits the high-impact errors of one type into caught, reviewed but not caught, and never selected for review. Errors missed = never selected + reviewed but not caught.</p>
     <p>The weak spot (red outline) is the type risk-based review misses most often.</p>`,
-  snowTime: `<p>One stale fund price (test D1) feeds every answer about that fund. Random sampling fixes each catch as a one-off; risk-based review links the clustered freshness flags to the feed and blocks later answers.</p>
+  snowTime: `<p>One stale fund price (test D1) feeds every answer about that fund. Both strategies act at about the same time. Random sampling fixes each catch as a one-off; only risk-based review links the clustered freshness flags to the feed, identifies the root cause and blocks later answers.</p>
     <p>The stale feed starts at 0h. Lines are averages over simulated days; bands are the middle 95%.</p>`,
-  quality: `<p>A small random review slice each day estimates the error rate. An alert fires when the estimate stays above the limit.</p>
-    <p>Dots are the daily estimate; lines are 95% Wilson intervals. The dashed line is the true error rate, known only in the simulation.</p>
-    <p>The estimate sits below the true rate because reviewers miss some errors.</p>`,
+  quality: QUALITY_INFO,
 };
+const OUTCOME_LEGEND = `<div class="qa-legend">${['caught', 'reviewed_not_caught', 'never_selected'].map((k) => `<span><i class="qa-sw ${OUTCOME_SW[k]}"></i>${{caught: 'Caught', reviewed_not_caught: 'Reviewed, not caught', never_selected: 'Never selected'}[k]}</span>`).join('')}</div>`;
 function summaryHTML(mode) {
   const lean = mode === 'lean';
   const tile = (label, key, sub) => `
     <div class="qa-kpi qa-tile">
       <span class="qa-kpi-label">${label}</span>
       <dl class="qa-tile-vals">
-        ${METHODS.map((m) => `<div class="qa-tile-row dash-skeleton" data-draw="tile" data-tile="${key}" data-m="${m}"><dt><i class="qa-sw thin" style="background:${METHOD_FILL[m]}"></i>${m === 'Random sampling' ? 'Random' : m}</dt><dd class="v">—</dd><dd class="r sr-only"></dd></div>`).join('')}
+        ${METHODS.map((m) => `<div class="qa-tile-row dash-skeleton" data-draw="tile" data-tile="${key}" data-m="${m}"><dt><i class="qa-sw thin" style="background:${METHOD_FILL[m]}"></i>${m === 'Random sampling' ? 'Random' : m}</dt><dd class="v">—</dd><dd class="p"></dd><dd class="r sr-only"></dd></div>`).join('')}
       </dl>
       <span class="qa-kpi-sub" data-draw="${sub}">—</span>
     </div>`;
@@ -447,12 +504,13 @@ function summaryHTML(mode) {
       ${legend}
       <div class="qa-chart dash-skeleton${tall ? ' tall' : ''}" data-draw="${draw}"${draw === 'byType' ? ' style="min-height:0"' : ''}></div>
       <p class="qa-chart-summary"></p>
+      ${draw === 'quality' ? `<div class="sr-only"><table><caption>Daily quality estimate</caption>${QUALITY_HEAD}<tbody data-draw="qualityTable"></tbody></table></div>` : ''}
     </div>`;
   // Fallback legends appear only when the chart is too narrow for its direct labels.
   const legendM = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw thin" style="background:${METHOD_FILL['Risk-based']}"></i>Risk-based (solid)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Random sampling']}"></i>Random sampling (dashed)</span></div>`;
-  const legendO = `<div class="qa-legend"><span><i class="qa-sw" style="background:${OUTCOME_FILL.caught}"></i>Caught</span><span><i class="qa-sw" style="background:${OUTCOME_FILL.reviewed_not_caught}"></i>Reviewed, not caught</span><span><i class="qa-sw" style="background:${OUTCOME_FILL.never_selected}"></i>Never selected</span></div>`;
+  const legendO = OUTCOME_LEGEND;
   const legendS = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw thin" style="background:var(--color-fg-muted)"></i>Affected answers (dotted)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Random sampling']}"></i>Random sampling (dashed)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Risk-based']}"></i>Risk-based (solid)</span></div>`;
-  const legendQ = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw" style="background:var(--series-1);border-radius:50%"></i>Estimate</span><span><i class="qa-sw thin" style="background:var(--color-fg)"></i>True error rate (dashed)</span></div>`;
+  const legendQ = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw" style="background:var(--series-1);border-radius:50%"></i>Corrected estimate</span><span><i class="qa-sw" style="border:1.25px solid var(--color-fg-muted);border-radius:50%"></i>Raw rate</span><span><i class="qa-sw thin" style="background:var(--color-fg)"></i>True rate (dashed)</span></div>`;
   return `
     <p class="qa-verdict dash-skeleton" data-draw="verdict">—</p>
     ${sliders}
@@ -469,7 +527,7 @@ function summaryHTML(mode) {
     <p class="qa-tag is-off" data-draw="defaultTag"></p>
     <div class="${lean ? 'qa-stack' : 'qa-grid'}">
       ${card('s-snow', 'Stale-price case: clients reached', 'snowTime', legendS)}
-      ${card('s-quality', 'Error-rate estimate vs true rate', 'quality', legendQ)}
+      ${card('s-quality', 'Corrected error rate vs true rate', 'quality', legendQ)}
     </div>`;
 }
 document.querySelectorAll('[data-summary-root]').forEach((root) => { root.innerHTML = summaryHTML(root.dataset.mode); });
