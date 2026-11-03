@@ -47,22 +47,22 @@
     </div>
     <div class="qa-grid">
       <div class="qa-card">
-        <div class="qa-titlerow"><h2>Missed high-impact errors by type</h2><details class="qa-info"><summary aria-label="How to read this: Missed high-impact errors by type" title="How to read this">i</summary><div class="qa-info-pop"><p>Errors missed = never selected for review + reviewed but not caught. Red outline: the type risk-based review misses most often.</p></div></details></div>
-        <div class="qa-legend"><span><i class="qa-sw" style="background:var(--series-1)"></i>Caught</span><span><i class="qa-sw" style="background:var(--series-4)"></i>Reviewed, not caught</span><span><i class="qa-sw" style="background:var(--cds-chart-muted)"></i>Never selected</span></div>
+        <div class="qa-titlerow"><h2>Missed high-impact errors by type</h2><details class="qa-info"><summary aria-label="How to read this: Missed high-impact errors by type" title="How to read this">i</summary><div class="qa-info-pop"><p>Errors missed = never selected for review + reviewed but not caught. Amber outline: the type risk-based review misses most often.</p></div></details></div>
+        <div class="qa-legend"><span><i class="qa-sw o-caught"></i>Caught</span><span><i class="qa-sw o-rnc"></i>Reviewed, not caught</span><span><i class="qa-sw o-never"></i>Never selected</span></div>
         <div class="qa-chart dash-skeleton" data-draw="byType"></div>
         <p class="qa-chart-summary"></p>
       </div>
       <div class="qa-card">
-        <div class="qa-titlerow"><h2>Review burden vs team capacity</h2><details class="qa-info"><summary aria-label="How to read this: Review burden vs team capacity" title="How to read this">i</summary><div class="qa-info-pop"><p>Daily reviews at the chosen budget, the team's capacity, and the daily reviews each strategy would need to catch half of the high-impact errors (assuming the team were staffed for it).</p></div></details></div>
+        <div class="qa-titlerow"><h2>Share of high-impact errors caught at team capacity (<span data-draw="metaVal" data-k="team_capacity">—</span>/day)</h2><details class="qa-info"><summary aria-label="How to read this: Share of high-impact errors caught at team capacity" title="How to read this">i</summary><div class="qa-info-pop"><p>Each bar is the share of injected high-impact errors a strategy catches when the team reviews exactly its daily capacity, at the reviewer catch rate set above. Percentages are caught / injected.</p><p>The dashed line is the ceiling: the most any review budget catches at this catch rate, even reviewing every answer, because reviewers miss some errors they look at.</p></div></details></div>
         <div class="qa-chart dash-skeleton" data-draw="burden" style="min-height:180px"></div>
         <p class="qa-chart-summary"></p>
       </div>
     </div>
     <div class="qa-card">
-      <div class="qa-titlerow"><h2>How the misses split</h2><details class="qa-info"><summary aria-label="How to read this: How the misses split" title="How to read this">i</summary><div class="qa-info-pop"><p>Averages over the simulated runs, with the middle-95% range on hover. The parts always add up: caught + never selected + reviewed but not caught = injected.</p></div></details></div>
+      <div class="qa-titlerow"><h2>How the misses split</h2><details class="qa-info"><summary aria-label="How to read this: How the misses split" title="How to read this">i</summary><div class="qa-info-pop"><p>Averages over the simulated runs, with the middle-95% range on hover. The parts always add up: caught + never selected + reviewed but not caught = injected.</p><p>By failure mode: all injected errors of Lopa's three priority modes (calculation, intent, wrong tool), high-impact or not. In this simulation each mode is oversampled to a minimum number of injected errors per run, so their rows have enough cases to compare.</p></div></details></div>
       <div class="qa-tablewrap">
         <table>
-          <thead><tr><th>Strategy</th><th>Errors</th><th class="num">Injected</th><th class="num">Caught</th><th class="num">Never selected</th><th class="num">Reviewed, not caught</th><th class="num">Missed</th></tr></thead>
+          <thead><tr><th>Strategy</th><th>Errors</th><th class="num">Injected</th><th class="num"><i class="qa-sw o-caught"></i>Caught</th><th class="num"><i class="qa-sw o-never"></i>Never selected</th><th class="num"><i class="qa-sw o-rnc"></i>Reviewed, not caught</th><th class="num">Missed</th></tr></thead>
           <tbody data-draw="splitTable"></tbody>
         </table>
       </div>
@@ -78,7 +78,7 @@
     </div>
     <p class="qa-tag is-off" data-draw="defaultTag"></p>
     <div class="qa-card">
-      <div class="qa-titlerow"><h2>Clients reached over the trading day</h2><details class="qa-info"><summary aria-label="How to read this: Clients reached over the trading day" title="How to read this">i</summary><div class="qa-info-pop"><p>Random sampling: a reviewer fixes the answer in front of them; nothing links it to the other answers built on the same stale price, so they keep reaching clients.</p><p>Risk-based review: answers carrying a freshness flag on the same fund reach reviewers together; once they cluster, the team traces them to the feed and blocks every later answer that uses it.</p><p>The stale feed starts at 0h. Answers that use it arrive through the day. Lines are averages over simulated days; bands are the middle 95%.</p></div></details></div>
+      <div class="qa-titlerow"><h2>Clients reached over the trading day</h2><details class="qa-info"><summary aria-label="How to read this: Clients reached over the trading day" title="How to read this">i</summary><div class="qa-info-pop"><p>Both strategies act at about the same time; only risk-based review identifies the root cause and blocks later answers.</p><p>Random sampling: a reviewer fixes the answer in front of them; nothing links it to the other answers built on the same stale price, so they keep reaching clients.</p><p>Risk-based review: answers carrying a freshness flag on the same fund reach reviewers together; once they cluster, the team traces them to the feed and blocks every later answer that uses it.</p><p>The stale feed starts at 0h. Answers that use it arrive through the day. Lines are averages over simulated days; bands are the middle 95%.</p></div></details></div>
       <div class="qa-legend" data-fallback hidden><span><i class="qa-sw thin" style="background:var(--color-fg-muted)"></i>Affected answers (dotted)</span><span><i class="qa-sw thin" style="background:var(--cds-chart-muted)"></i>Random sampling (dashed)</span><span><i class="qa-sw thin" style="background:var(--series-1)"></i>Risk-based (solid)</span></div>
       <div class="qa-chart tall dash-skeleton" data-draw="snowTime"></div>
       <p class="qa-chart-summary"></p>
@@ -99,7 +99,7 @@
       <h2>Outcome by strategy</h2>
       <div class="qa-tablewrap">
         <table>
-          <thead><tr><th>Strategy</th><th class="num">Affected answers</th><th class="num">Reviewed</th><th class="num">Caught</th><th class="num">Blocked at source</th><th class="num">Reached clients</th><th>Detection</th></tr></thead>
+          <thead><tr><th>Strategy</th><th class="num">Affected answers</th><th class="num">Reviewed</th><th class="num">Caught</th><th class="num">Blocked at source</th><th class="num">Reached clients</th><th class="num">First action (median)</th><th>Response</th></tr></thead>
           <tbody data-draw="snowTable"></tbody>
         </table>
       </div>
@@ -108,16 +108,16 @@
 
   <!-- ============ REVIEWER RELIABILITY ============ -->
   <section class="qa-page" id="reviewers" data-panel="reviewers" role="tabpanel" hidden>
-    <p class="qa-lede">Human review is the control layer; this shows how often reviewers catch planted errors under different conditions.</p>
+    <p class="qa-lede">Simulated figures: how often reviewers catch planted errors under different conditions; human review is the control layer.</p>
     <div class="qa-card">
-      <div class="qa-titlerow"><h2>Reviewer catch rate by condition</h2><details class="qa-info"><summary aria-label="How to read this: Reviewer catch rate by condition" title="How to read this">i</summary><div class="qa-info-pop"><p>Human review is not an error type. It is the control layer: the step that is supposed to catch what the agent got wrong. Each condition is linked to a control-layer test case in the register (H1 to H5 and H7).</p><p>Dots are the share of planted errors caught; lines are 95% Wilson intervals. The dashed line is the baseline. Simulated from the same reviewer model the strategy comparison uses.</p></div></details></div>
+      <div class="qa-titlerow"><h2>Reviewer catch rate by condition</h2><details class="qa-info"><summary aria-label="How to read this: Reviewer catch rate by condition" title="How to read this">i</summary><div class="qa-info-pop"><p>Human review is not an error type. It is the control layer: the step that is supposed to catch what the agent got wrong. Each condition is linked to a control-layer test case in the register (H1 to H5 and H7).</p><p>Dots are the share of planted errors caught; lines are 95% Wilson intervals. The dashed line is the baseline. Simulated from the same reviewer model the strategy comparison uses.</p><p>A real study would need intervals that account for each reviewer seeing several items (clustered by reviewer), not a plain Wilson interval.</p></div></details></div>
       <div class="qa-chart dash-skeleton" data-draw="reviewers"></div>
       <p class="qa-chart-summary"></p>
     </div>
     <div class="qa-card">
       <div class="qa-tablewrap">
         <table>
-          <thead><tr><th>Condition</th><th>Linked test</th><th class="num">Reviewers</th><th class="num">Caught / shown</th><th class="num">Catch rate</th><th class="num">95% Wilson interval</th></tr></thead>
+          <thead><tr><th>Condition</th><th>Linked test</th><th class="num">Simulated reviewers</th><th class="num">Caught / shown</th><th class="num">Catch rate</th><th class="num">95% Wilson interval</th></tr></thead>
           <tbody data-draw="reviewerTable"></tbody>
         </table>
       </div>
@@ -126,18 +126,18 @@
 
   <!-- ============ QUALITY OVER TIME ============ -->
   <section class="qa-page" id="quality" data-panel="quality" role="tabpanel" hidden>
-    <p class="qa-lede">A small random slice of answers is reviewed daily to keep an unbiased error-rate estimate and spot drift.</p>
+    <p class="qa-lede">A small random daily slice, with seeded known errors, gives an error-rate estimate corrected for reviewer misses.</p>
     <p class="qa-tag is-off" data-draw="defaultTag"></p>
     <div class="qa-card">
-      <div class="qa-titlerow"><h2>Estimated vs true error rate</h2><details class="qa-info"><summary aria-label="How to read this: Estimated vs true error rate" title="How to read this">i</summary><div class="qa-info-pop"><p>Risk-based review looks where errors are likely, so on its own it cannot tell you the overall error rate. The daily random slice keeps an unbiased estimate.</p><p>Dots are the daily estimate; lines are 95% Wilson intervals. The dashed line is the true error rate, known only in the simulation. An alert fires when the estimate stays above the limit.</p><p>The estimate sits below the true rate because reviewers miss some errors.</p></div></details></div>
-      <div class="qa-legend" data-fallback hidden><span><i class="qa-sw" style="background:var(--series-1);border-radius:50%"></i>Estimate</span><span><i class="qa-sw thin" style="background:var(--color-fg)"></i>True error rate (dashed)</span></div>
+      <div class="qa-titlerow"><h2>Corrected vs true error rate</h2><details class="qa-info"><summary aria-label="How to read this: Corrected vs true error rate" title="How to read this">i</summary><div class="qa-info-pop"><p>Risk-based review looks where errors are likely, so on its own it cannot tell you the overall error rate. The daily random slice keeps an unbiased estimate.</p><p>Each day <b data-draw="qVal" data-k="slice">—</b> answers are reviewed at random. <b data-draw="qVal" data-k="canary_per_day">—</b> of them are seeded known errors (canaries), drawn from the same error mix and reviewed the same way, so reviewers cannot tell them apart.</p><p>The estimate is corrected for reviewer misses: the error rate in the other <b data-draw="qVal" data-k="real_per_day">—</b> reviews divided by the share of canaries caught so far, capped at 100%. Lines are 95% intervals; early-day intervals are wide because few canaries have been seen. Hollow dots are the raw observed rate.</p><p>Trade-off: this many canaries is more than the suite's 1 in 50, so the reviewer catch rate can be estimated, but fewer real answers get reviewed.</p><p>An alert fires when the corrected estimate stays above the limit <b data-draw="qVal" data-k="alert_days">—</b> days in a row. The dashed line is the true error rate, known only in the simulation.</p></div></details></div>
+      <div class="qa-legend" data-fallback hidden><span><i class="qa-sw" style="background:var(--series-1);border-radius:50%"></i>Corrected estimate</span><span><i class="qa-sw" style="border:1.25px solid var(--color-fg-muted);border-radius:50%"></i>Raw rate</span><span><i class="qa-sw thin" style="background:var(--color-fg)"></i>True rate (dashed)</span></div>
       <div class="qa-chart tall dash-skeleton" data-draw="quality"></div>
       <p class="qa-chart-summary"></p>
     </div>
     <div class="qa-card">
       <div class="qa-tablewrap">
         <table>
-          <thead><tr><th class="num">Day</th><th class="num">Reviewed</th><th class="num">Errors found</th><th class="num">Estimate</th><th class="num">95% Wilson interval</th><th class="num">True rate</th><th>Status</th></tr></thead>
+          <thead><tr><th class="num">Day</th><th class="num">Reviewed</th><th class="num">Errors found</th><th class="num">Raw rate</th><th class="num">Canaries caught / seen (to date)</th><th class="num">Corrected estimate</th><th class="num">95% interval</th><th class="num">True rate</th><th>Status</th></tr></thead>
           <tbody data-draw="qualityTable"></tbody>
         </table>
       </div>
@@ -147,8 +147,8 @@
   <!-- ============ FAILURE-MODE REGISTER ============ -->
   <section class="qa-page" id="register" data-panel="register" role="tabpanel" hidden>
     <div class="qa-kpis">
-      <div class="qa-kpi"><span class="qa-kpi-label">Agent failure types</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-field="agent">—</span><span class="qa-kpi-sub">one failure mode each</span></div>
-      <div class="qa-kpi"><span class="qa-kpi-label">High-impact failure types</span><span class="qa-kpi-value is-bad dash-skeleton" data-draw="kpi" data-field="high_impact">—</span><span class="qa-kpi-sub" data-draw="hiRule">—</span></div>
+      <div class="qa-kpi"><span class="qa-kpi-label">Agent failure types</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-field="agent">—</span><span class="qa-kpi-sub">of <span data-draw="kpi" data-field="total">—</span> test cases</span></div>
+      <div class="qa-kpi"><span class="qa-kpi-label">High-impact failure types</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-field="high_impact">—</span><span class="qa-kpi-sub" data-draw="hiRule">—</span></div>
       <div class="qa-kpi"><span class="qa-kpi-label">Average RPN, agent failures</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-field="avg_rpn">—</span><span class="qa-kpi-sub">out of <span data-draw="maxrpn">—</span></span></div>
       <div class="qa-kpi"><span class="qa-kpi-label">Test cases failed</span><span class="qa-kpi-value dash-skeleton" data-draw="kpi" data-field="failed">—</span><span class="qa-kpi-sub">of <span data-draw="kpi" data-field="run">—</span> with a sample result</span></div>
     </div>
@@ -203,7 +203,7 @@
     </div>
 
     <div class="qa-card" id="full-register">
-      <div class="qa-titlerow"><h2>Full failure-mode register</h2><details class="qa-info"><summary aria-label="How to read this: Full failure-mode register" title="How to read this">i</summary><div class="qa-info-pop"><p>All test cases. S, L and D are severity, likelihood and detectability (1 to 5). &ldquo;What it is&rdquo; is the expected failure. Results and evidence are illustrative placeholders. Click a column heading to sort.</p></div></details></div>
+      <div class="qa-titlerow"><h2>Full failure-mode register</h2><details class="qa-info"><summary aria-label="How to read this: Full failure-mode register" title="How to read this">i</summary><div class="qa-info-pop"><p>All test cases. S, L and D are severity, likelihood and detectability (1 to 5). &ldquo;What it is&rdquo; is the expected failure. Results and evidence are illustrative placeholders. &ldquo;Team-added&rdquo; marks failure modes the team added outside the test-suite workbook, pending Lopa's review. Click a column heading to sort.</p></div></details></div>
       <div class="qa-tools">
         <input class="qa-search" id="qa-search" type="search" placeholder="Search test cases" aria-label="Search test cases">
         <div class="qa-seg" role="group" aria-label="Filter by error type or control layer">
@@ -250,6 +250,8 @@
           </ul>
           Each injected error takes a failure type from the test suite, and that test's RPN.</dd>
         <dt>Control layer</dt><dd>Human review: the step that should catch errors, not an error type. Its failure modes (H1 to H8) are listed separately; their RPNs are never used as risk priors.</dd>
+        <dt>Lopa's priority failure modes</dt><dd><span data-draw="lopaModes">—</span>. In the strategy simulation each is oversampled to at least <b data-draw="metaVal" data-k="min_injected_per_mode">—</b> injected errors per run; the quality series uses the natural mix.</dd>
+        <dt>Team-added failure mode</dt><dd>A failure mode the team added outside the test-suite workbook, scored and tiered the same way (T1, wrong tool selected; pending Lopa's review).</dd>
         <dt>Errors missed</dt><dd>Never selected for review + reviewed but not caught.</dd>
         <dt>Review minutes per high-impact error caught</dt><dd>Total review time at the chosen budget ÷ high-impact errors caught.</dd>
         <dt>Clients reached before containment</dt><dd>Stale-price case: affected answers neither caught by a reviewer nor blocked at the source.</dd>
@@ -295,8 +297,17 @@
       <h2>Intervals</h2>
       <ul class="qa-steps">
         <li><b>Simulated counts and shares:</b> the middle 95% of simulated runs.</li>
-        <li><b>Proportions measured from a sample</b> (daily quality estimate, reviewer catch rates): the <b>Wilson score interval</b>, not the normal (CLT) approximation. Wilson stays inside 0–100% and stays honest at small counts, such as 2 errors found in 40 answers.</li>
+        <li><b>Proportions measured from a sample</b> (reviewer catch rates, reviewer sensitivity on canaries): the <b>Wilson score interval</b>, not the normal (CLT) approximation. Wilson stays inside 0–100% and stays honest at small counts, such as 2 errors found in 40 answers.</li>
+        <li><b>Corrected error rate:</b> raw rate in the non-canary reviews ÷ reviewer sensitivity (canaries caught ÷ canaries seen to date), capped at 100%. Its 95% interval samples both uncertainties: <b data-draw="qVal" data-k="correction_draws">—</b> draws of Beta(found + 1, not found + 1) ÷ Beta(canaries caught + 1, canaries missed + 1), 2.5th to 97.5th percentile.</li>
+        <li><b>Percentages:</b> every displayed percentage is a displayed count ÷ its displayed denominator.</li>
       </ul>
+    </div>
+    <div class="qa-card">
+      <h2>How it becomes live</h2>
+      <ol class="qa-flow" aria-label="Data flow, in order">
+        <li>Agent runs</li><li>Output log with guardrail flags</li><li>Risk score</li><li>Selection (random or risk-based)</li><li>Reviewer queue</li><li>Review decisions</li><li>Metrics store</li><li>Dashboard refresh</li>
+      </ol>
+      <p class="qa-note">Today the pages use a precomputed simulation; the same flow feeds real runs.</p>
     </div>
     <div class="qa-card">
       <h2>Assumptions</h2>

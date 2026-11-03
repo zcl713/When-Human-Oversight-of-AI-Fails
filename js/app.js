@@ -49,6 +49,7 @@ dash.draw('hiTypes', (el) => {
   el.textContent = m.high_impact_types.map((id) => { const r = risks.find((x) => x.id === id); return `${id} ${r.test} (${r.area}, RPN ${r.rpn})`; }).join('; ');
 });
 dash.draw('metaVal', (el) => { const m = meta(); if (m) el.textContent = intf(m[el.dataset.k]); });
+dash.draw('lopaModes', (el) => { const m = meta(); if (m) el.textContent = Object.entries(m.lopa_modes).map(([k, ids]) => `${k} (${ids.join(', ')})`).join(', '); });
 
 /* ---------- register ---------- */
 dash.draw('areaTier', (el) => {
@@ -105,11 +106,17 @@ dash.draw('catTable', (el) => {
 });
 
 const resultPill = (r) => pill(r.result, 'r-' + r.result.split(' ')[0]);
+/** Failure-mode name, with a "Team-added" badge for modes the team added outside the workbook. */
+function testCell(r) {
+  if (!r.team_added) return td(r.test);
+  const b = document.createElement('span'); b.className = 'qa-badge neutral'; b.textContent = 'Team-added'; b.title = r.team_note;
+  const c = td(r.test); c.append(b); return c;
+}
 dash.draw('top10', (el) => {
   const rows = rowsOf('top10'); el.replaceChildren(); if (!rows) return;
   rows.forEach((r) => {
     const tr = document.createElement('tr');
-    tr.append(td(intf(r.rank), 'num'), td(r.id, 'id'), td(r.test), td(r.area, 'hide-sm'), td(intf(r.rpn), 'num'), td(pill(r.tier, 't-' + r.tier)), td(resultPill(r)), td(r.mvp ? pill(r.mvp, 'mvp') : '', 'hide-sm'));
+    tr.append(td(intf(r.rank), 'num'), td(r.id, 'id'), testCell(r), td(r.area, 'hide-sm'), td(intf(r.rpn), 'num'), td(pill(r.tier, 't-' + r.tier)), td(resultPill(r)), td(r.mvp ? pill(r.mvp, 'mvp') : '', 'hide-sm'));
     el.appendChild(tr);
   });
 });
@@ -144,59 +151,61 @@ dash.draw('register', (el) => {
     .sort((a, b) => { const va = val(a), vb = val(b); return (typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb))) * reg.dir || b.rpn - a.rpn; })
     .forEach((r) => {
       const tr = document.createElement('tr');
-      tr.append(td(r.id, 'id'), td(r.test), td(r.area, 'hide-sm'), td(String(r.severity), 'num hide-sm'), td(String(r.likelihood), 'num hide-sm'), td(String(r.detectability), 'num hide-sm'),
+      tr.append(td(r.id, 'id'), testCell(r), td(r.area, 'hide-sm'), td(String(r.severity), 'num hide-sm'), td(String(r.likelihood), 'num hide-sm'), td(String(r.detectability), 'num hide-sm'),
         td(intf(r.rpn), 'num'), td(pill(r.tier, 't-' + r.tier)), td(resultPill(r)), td(r.what, 'wrap hide-sm'), td(r.evidence, 'wrap hide-sm'));
       el.appendChild(tr);
     });
 });
 
 /* ---------- strategy comparison ---------- */
+/* Share of high-impact errors caught at team capacity, per strategy, against the ceiling (the most
+   any budget catches at this reviewer catch rate). Counts come from sim_meta.json; percentages are
+   count / injected. */
+function wrapText(textSel, str, maxW, x, lh) {
+  const words = str.split(' '); let line = [];
+  let t = textSel.append('tspan').attr('x', x);
+  words.forEach((w) => { line.push(w); t.text(line.join(' ')); if (t.node().getComputedTextLength() > maxW && line.length > 1) { line.pop(); t.text(line.join(' ')); line = [w]; t = textSel.append('tspan').attr('x', x).attr('dy', lh).text(w); } });
+  return textSel.selectAll('tspan').size();
+}
 dash.draw('burden', (el) => {
   const c = current(), m = meta(); el.replaceChildren(); if (!c) return; done(el);
-  const need = (method) => m.reviews_needed_50.find((r) => r.method === method && r.catch_rate === c.catch);
-  const rows = [
-    {label: 'Chosen budget', v: c.risk.reviews_per_day, note: `${c.budget}% of ${m.outputs_per_day} answers a day`, fill: 'var(--color-fg-muted)'},
-    ...['Risk-based', 'Random sampling'].map((meth) => { const n = need(meth);
-      return {label: `Needed: ${meth}`, v: n.reviews_per_day, fill: METHOD_FILL[meth],
-        note: n.reachable ? `to catch half (${n.budget_pct}% of answers)` : `not reachable: reviewing every answer catches at most ${pct(n.best_share)}`}; }),
-  ];
-  // label above each bar so the bars get the full width on a phone
-  const W = el.clientWidth, rowH = 62, top = 20, H = rows.length * rowH + top;
-  const svg = svgFor(el, W, H, 'Bar chart: daily reviews at the chosen budget and needed to catch half of high-impact errors, against team capacity');
-  const left = 4;
-  const x = d3.scaleLinear([0, Math.max(m.team_capacity, d3.max(rows, (r) => r.v || 0)) * 1.08], [left, W - 12]);
+  const cap = (method) => m.at_capacity.find((r) => r.method === method && r.catch_rate === c.catch);
+  const ceil = m.ceiling.find((r) => r.catch_rate === c.catch);
+  const rows = ['Risk-based', 'Random sampling'].map((meth) => ({meth, ...cap(meth)}));
+  const W = el.clientWidth, left = 4, rowH = 48;
+  const svg = svgFor(el, W, 10, 'Bar chart: share of high-impact errors caught at team capacity for each strategy, with the ceiling');
+  const x = d3.scaleLinear([0, 1], [left, W - 12]);
+  // ceiling label first (wraps on a phone), then the bars below it
+  const label = svg.append('text').attr('y', 12).attr('font-size', 11).style('fill', 'var(--color-fg)');
+  const lines = wrapText(label, `ceiling: even reviewing everything catches at most ${share(ceil.caught, ceil.injected)}`, W - 16, left, 13);
+  const top = 12 + lines * 13 + 6, H = top + rows.length * rowH + 22;
+  svg.attr('viewBox', `0 0 ${W} ${H}`);
   rows.forEach((r, i) => {
     const yy = top + i * rowH;
-    svg.append('text').attr('x', left).attr('y', yy + 10).attr('font-size', 12).attr('font-weight', 600).text(r.label);
-    const by = yy + 16;
-    if (r.v != null) {
-      svg.append('rect').attr('class', 'grow').attr('x', left).attr('y', by).attr('width', Math.max(2, x(r.v) - left)).attr('height', 18).attr('rx', 3).style('fill', r.fill);
-      const inside = x(r.v) > W - 70;
-      svg.append('text').attr('x', inside ? x(r.v) - 6 : x(r.v) + 6).attr('y', by + 9).attr('dy', '0.35em').attr('text-anchor', inside ? 'end' : 'start').attr('font-size', 12).attr('font-weight', 600).style('fill', inside ? 'var(--color-panel)' : null).text(intf(r.v) + '/day');
-    }
-    const note = svg.append('text').attr('class', 'muted').attr('x', left).attr('y', r.v != null ? by + 32 : by + 10).attr('font-size', 11);
-    // wrap the note onto a second line on narrow screens
-    const words = r.note.split(' '); let line = [], ln = 0;
-    let t = note.append('tspan').attr('x', left);
-    words.forEach((w) => { line.push(w); t.text(line.join(' ')); if (t.node().getComputedTextLength() > W - 16 && line.length > 1) { line.pop(); t.text(line.join(' ')); line = [w]; ln += 1; t = note.append('tspan').attr('x', left).attr('dy', 13).text(w); } });
+    svg.append('text').attr('x', left).attr('y', yy + 10).attr('font-size', 12).attr('font-weight', 600).text(r.meth);
+    const by = yy + 16, w = Math.max(2, x(r.caught / r.injected) - left);
+    svg.append('rect').attr('class', 'grow').attr('x', left).attr('y', by).attr('width', w).attr('height', 18).attr('rx', 3).style('fill', METHOD_FILL[r.meth]);
+    svg.append('text').attr('x', left + w + 6).attr('y', by + 9).attr('dy', '0.35em').attr('font-size', 12).text(`${share(r.caught, r.injected)} (${r.caught} of ${r.injected})`);
   });
-  const cx = x(m.team_capacity);
-  svg.append('line').attr('x1', cx).attr('x2', cx).attr('y1', top - 6).attr('y2', H - 4).style('stroke', 'var(--color-bad)').attr('stroke-dasharray', '4 3').attr('stroke-width', 1.5);
-  svg.append('text').attr('x', cx).attr('y', top - 8).attr('text-anchor', cx > W - 90 ? 'end' : cx < 90 ? 'start' : 'middle').attr('font-size', 11).style('fill', 'var(--color-bad)').text(`team capacity ${m.team_capacity}/day`);
-  const nk = need('Risk-based'), nr = need('Random sampling');
-  const say = (n, name) => n.reachable ? `${name} would need ${intf(n.reviews_per_day)} reviews a day` : `${name} cannot reach half even reviewing every answer (at most ${pct(n.best_share)})`;
-  setSummary(el, `At ${pct(c.catch)} reviewer catch rate, ${say(nk, 'risk-based review')} and ${say(nr, 'random sampling')}, against a team capacity of ${m.team_capacity}. The chosen budget is ${c.risk.reviews_per_day} reviews a day.`);
+  const cx = x(ceil.caught / ceil.injected);
+  svg.append('line').attr('x1', cx).attr('x2', cx).attr('y1', top - 4).attr('y2', top + rows.length * rowH).style('stroke', 'var(--color-fg)').attr('stroke-dasharray', '4 3').attr('stroke-width', 1.5);
+  axisStyle(svg.append('g').attr('transform', `translate(0,${top + rows.length * rowH})`).call(d3.axisBottom(x).ticks(W < 480 ? 3 : 5).tickFormat(pct).tickSize(0).tickPadding(6)));
+  const [rk, rr] = rows;
+  setSummary(el, `At team capacity (${rk.reviews_per_day} reviews a day, a ${rk.budget_pct}% budget) and a ${pct(c.catch)} reviewer catch rate, risk-based review catches ${rk.caught} of ${rk.injected} high-impact errors (${share(rk.caught, rk.injected)}) and random sampling ${rr.caught} (${share(rr.caught, rr.injected)}). ` +
+    `Even reviewing everything catches at most ${ceil.caught} of ${ceil.injected} (${share(ceil.caught, ceil.injected)}), because reviewers miss some errors they look at.`);
 });
 dash.draw('splitTable', (el) => {
-  const c = current(); el.replaceChildren(); if (!c) return;
-  [['Random sampling', c.random], ['Risk-based', c.risk]].forEach(([name, cell]) => {
-    [['High-impact', cell.hi], ['All errors', cell.all]].forEach(([g, b]) => {
-      const tr = document.createElement('tr');
-      const n = (t) => { const x = td(intf(t[0]), 'num'); x.title = rangeText(t); return x; };
-      tr.append(td(name), td(g), n(b.injected), n(b.caught), n(b.never_selected), n(b.reviewed_not_caught), n(b.missed));
-      el.appendChild(tr);
-    });
-  });
+  const c = current(), m = meta(); el.replaceChildren(); if (!c) return;
+  const row = (name, g, b) => {
+    const tr = document.createElement('tr');
+    const n = (t) => { const x = td(intf(t[0]), 'num'); x.title = rangeText(t); return x; };
+    tr.append(td(name), td(g), n(b.injected), n(b.caught), n(b.never_selected), n(b.reviewed_not_caught), n(b.missed));
+    el.appendChild(tr);
+  };
+  const strategies = [['Random sampling', c.random], ['Risk-based', c.risk]];
+  strategies.forEach(([name, cell]) => { row(name, 'High-impact', cell.hi); row(name, 'All errors', cell.all); });
+  const head = document.createElement('tr'); const h = td(`By failure mode (Lopa's three), oversampled to at least ${m.min_injected_per_mode} injected each`, 'mode-head'); h.colSpan = 7; head.append(h); el.appendChild(head);
+  Object.entries(m.lopa_modes).forEach(([mode, ids]) => strategies.forEach(([name, cell]) => row(name, `${mode} (${ids.join(', ')})`, cell.by_mode[mode])));
 });
 
 /* ---------- snowball ---------- */
@@ -262,7 +271,7 @@ dash.draw('snowTable', (el) => {
     const tr = document.createElement('tr');
     const n = (t) => { const x = td(intf(t[0]), 'num'); x.title = rangeText(t); return x; };
     tr.append(td(o.method), td(intf(o.affected), 'num'), n(o.reviewed), n(o.caught), n(o.blocked), n(o.clients_reached),
-      td(o.detection_min == null ? 'none' : `${o.detection_kind}, about ${o.detection_min} min (median)`));
+      td(o.detection_min == null ? 'none' : `about ${o.detection_min} min`, 'num'), td(o.root_cause_found ? 'Root cause found; later answers blocked' : 'One-off fix; root cause not found'));
     el.appendChild(tr);
   });
 });
@@ -299,18 +308,6 @@ dash.draw('reviewerTable', (el) => {
     const [lo, hi] = wilson(r.caught, r.shown);
     const tr = document.createElement('tr');
     tr.append(td(r.label), td(r.linked), td(intf(r.reviewers), 'num'), td(`${r.caught} / ${r.shown}`, 'num'), td(pct(r.caught / r.shown), 'num'), td(`${pct(lo)}–${pct(hi)}`, 'num'));
-    el.appendChild(tr);
-  });
-});
-
-/* ---------- quality over time ---------- */
-dash.draw('qualityTable', (el) => {
-  const q = rowsOf('quality'); el.replaceChildren(); if (!q) return;
-  q.days.forEach((d) => {
-    const [lo, hi] = wilson(d.errors_found, d.reviewed);
-    const status = d.day === q.alert_day ? '⚠ Alert' : d.estimate > q.alert_limit ? 'Above limit' : '';
-    const tr = document.createElement('tr');
-    tr.append(td(String(d.day), 'num'), td(intf(d.reviewed), 'num'), td(intf(d.errors_found), 'num'), td(pct1(d.estimate), 'num'), td(`${pct1(lo)}–${pct1(hi)}`, 'num'), td(pct1(d.true_rate), 'num'), td(status));
     el.appendChild(tr);
   });
 });
