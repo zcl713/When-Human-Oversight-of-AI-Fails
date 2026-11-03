@@ -42,6 +42,15 @@ Old links keep working: `#register` opens the Failure-mode register tab, `#strat
 - **Error type:** Reasoning, Planning or System execution, the step of the agent's workflow where
   the failure starts. Human review is not an error type; it is the control layer.
 - **Errors missed:** never selected for review + reviewed but not caught.
+- **Lopa's priority failure modes** (`LOPA_MODES`): calculation (C1, C2, C6), intent (I1, I2) and
+  wrong tool (T1). In the strategy simulation only, each is oversampled to at least
+  `MIN_INJECTED_PER_MODE` (15) injected errors per run by reassigning errors from the most common
+  other failure types, so the total stays the same. The quality series uses the natural mix.
+- **Team-added failure modes** (`TEAM_ADDED`): test cases the team added without editing the
+  workbook. T1 "Wrong tool selected" (Planning, S4 L3 D4, RPN 48) is pending Lopa's review. It is
+  injected but not high-impact while its RPN is below `HIGH_IMPACT_RPN`.
+- **Percentages:** every displayed percentage is a displayed count ÷ its displayed denominator
+  (`share()` in `js/shared.js`). Curves may plot unrounded means; text quoting them uses counts.
 
 ## The data
 
@@ -54,14 +63,21 @@ constant marked `ASSUMPTION` at the top of the file; the Method tab lists them a
 | File | What it holds |
 |---|---|
 | `risks.json` | The test suite: scores, RPN, tier, error type or control layer, illustrative sample results |
-| `sim_grid.json` | Results for every review budget (2–30%) × reviewer catch rate (40–90%) × strategy; drives the sliders |
-| `sim_meta.json` | Definitions, defaults, team capacity, reviews needed to catch half, and the assumptions list |
+| `sim_grid.json` | Results for every review budget (2–30%) × reviewer catch rate (40–90%) × strategy, overall, by error type and by Lopa's mode; drives the sliders |
+| `sim_meta.json` | Definitions, defaults, team capacity, Lopa's modes, share caught at team capacity (`at_capacity`), the best achievable share (`ceiling`) per catch rate, and the assumptions list |
 | `snowball.json` | Stale-price case: outcome per strategy, time series, dependency graph |
-| `quality.json` | 14 days of the random-review quality estimate, true rate, alert limit and alert day |
+| `quality.json` | 14 days of the random review slice: raw rate, canaries caught / seen to date, reviewer sensitivity, the corrected estimate with its 95% interval, true rate, alert limit and alert days |
 | `oversight.json` | Reviewer catch rate by condition (illustrative) |
 
-Counts are whole-number means over the runs, with the middle 95% of runs as the range. Proportions
-measured from a sample use Wilson intervals (`wilson()` in `js/shared.js`), never the normal approximation.
+Counts are whole-number means over the runs, with the middle 95% of runs as the range; by-type
+counts are apportioned so they add up to the totals. Proportions measured from a sample use Wilson
+intervals (`wilson()` in `js/shared.js`), never the normal approximation.
+
+**Quality correction.** Each day `CANARY_PER_DAY` (4) of the 40 random reviews are seeded known errors.
+Reviewer sensitivity = canaries caught ÷ canaries seen to date. Corrected error rate = raw rate in the
+other 36 reviews ÷ sensitivity, capped at 100%; its 95% interval comes from `CORRECTION_DRAWS` (2,000)
+draws of the two Beta posteriors. The alert rule (`ALERT_DAYS` days in a row above `ALERT_LIMIT`)
+uses the corrected estimate.
 
 ## Editing
 
@@ -70,6 +86,8 @@ measured from a sample use Wilson intervals (`wilson()` in `js/shared.js`), neve
   pick up score changes.
 - **Change an assumption or the high-impact threshold:** edit the constants at the top of the
   generator, then regenerate.
+- **Add or rescore a team-added failure mode:** edit `TEAM_ADDED` in the generator (and
+  `LOPA_MODES` if it is a priority mode), then regenerate. Do not edit the workbook for these.
 - **Change RPN tier thresholds:** `THRESHOLDS` in `js/shared.js` (the generator's `tier()` uses the same values).
 - **Change wording:** `index.html`, `lean/index.html`, and the summary text in `js/shared.js`.
 - **Regenerate the sample data** (needs `openpyxl`):
