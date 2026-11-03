@@ -387,17 +387,31 @@ dash.draw('snowTime', (el) => {
 /* Main marker and line: the estimate corrected for reviewer misses (sensitivity measured on seeded
    canaries), with its 95% interval. Hollow dot: the raw observed rate. */
 dash.draw('qVal', (el) => { const q = rowsOf('quality'); if (q) el.textContent = intf(q[el.dataset.k]); });
-function alertSentence(q) {
-  const lim = pct(q.alert_limit), early = q.alerts.filter((d) => d < q.drift_start_day);
-  const parts = [];
-  if (early.length) parts.push(`The corrected estimate stays above the ${lim} limit for ${q.alert_days} days in a row by day ${early[0]}, before drift begins: a false alarm while few canaries have been seen.`);
-  if (q.drift_alert_day) parts.push(`After drift starts on day ${q.drift_start_day} it alerts on day ${q.drift_alert_day}, ${q.drift_alert_day - q.drift_start_day} days later.`);
-  else {
-    const over = q.days.filter((d) => d.day >= q.drift_start_day && d.corrected > q.alert_limit).map((d) => d.day);
-    parts.push(`After drift starts on day ${q.drift_start_day}, the corrected estimate is above the limit on ${over.length ? 'day' + (over.length > 1 ? 's ' : ' ') + over.join(', ') : 'no day'} but not ${q.alert_days} days in a row, so the drift is not alerted within the window.`);
-  }
-  return parts.join(' ');
+/** "days 12–14" / "day 5" / "days 3, 7–9": alert days compressed into ranges. */
+function dayList(days) {
+  const runs = [];
+  days.forEach((d) => { const r = runs[runs.length - 1]; if (r && d === r[1] + 1) r[1] = d; else runs.push([d, d]); });
+  return (days.length > 1 ? 'days ' : 'day ') + runs.map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`)).join(', ');
 }
+/** The monitor evaluation across simulated runs, for one rule. Percentages are runs / total runs. */
+function evalSentence(e) {
+  const med = e.median_delay_days == null ? 'never' : `in a median of ${e.median_delay_days} day${e.median_delay_days === 1 ? '' : 's'} after it starts`;
+  return `false alarm before drift in ${share(e.false_alarm_runs, e.runs)} (${e.false_alarm_runs} of ${e.runs}); drift alerted ${med}; missed within the window in ${share(e.missed_runs, e.runs)} (${e.missed_runs} of ${e.runs})`;
+}
+function evalParagraph(q) {
+  return `Across ${q.evaluation.runs} simulated runs: ${evalSentence(q.evaluation.new)}. ` +
+    `Old rule (${q.old_rule.alert_days} days in a row above the limit on the daily estimate, no warm-up): ${evalSentence(q.evaluation.old)}.`;
+}
+function alertSentence(q) {
+  const lim = pct(q.alert_limit), d0 = q.drift_start_day;
+  const head = `On this illustrative run (fixed seed), alerts are possible from day ${q.warmup_day}, once ${q.min_canaries_for_alert} canaries have been seen. `;
+  if (!q.alerts.length) return head + `The pooled ${q.window_days}-day estimate never goes above the ${lim} limit, so no alert fires and the drift is missed.`;
+  const early = q.alerts.filter((d) => d < d0);
+  return head + `The pooled ${q.window_days}-day estimate is above the ${lim} limit on ${dayList(q.alerts)}` +
+    (early.length ? `, including ${dayList(early)} before drift starts (a false alarm)` : '') + '; ' +
+    (q.drift_alert_day ? `the drift is alerted on day ${q.drift_alert_day}, ${q.drift_alert_day - d0} days after it starts on day ${d0}.` : `the drift is not alerted within the window.`);
+}
+dash.draw('qEval', (el) => { const q = rowsOf('quality'); if (q) el.textContent = evalParagraph(q); });
 dash.draw('quality', (el) => {
   if (failed('quality')) return showFail(el);
   const q = rowsOf('quality'); el.replaceChildren(); if (!q) return; done(el);
@@ -406,7 +420,7 @@ dash.draw('quality', (el) => {
   const svg = svgFor(el, W, H, 'Chart: daily error rate corrected for reviewer misses with 95% intervals, the raw observed rate, the true error rate, and the alert limit');
   const ymax = Math.ceil(Math.max(d3.max(days, (d) => d.corrected_hi), d3.max(days, (d) => d.true_rate)) * 10) / 10;
   const left = Math.ceil(textWidth(svg, [pct(ymax)], 11)) + 10;
-  const labels = ['Corrected estimate', 'True error rate', 'Raw rate'];
+  const labels = ['Corrected estimate', 'True error rate', 'Raw rate', `${q.window_days}-day pooled`];
   const right = W < 480 ? 12 : Math.ceil(textWidth(svg, labels, 12)) + 14;
   fallbackLegend(el, W < 480);
   const x = d3.scaleLinear([0.5, days.length + 0.5], [left, W - right]);
@@ -420,18 +434,22 @@ dash.draw('quality', (el) => {
   svg.append('path').datum(days).attr('d', d3.line().x((d) => x(d.day)).y((d) => y(d.true_rate))).style('fill', 'none').style('stroke', 'var(--color-fg)').attr('stroke-width', 1.5).attr('stroke-dasharray', '6 4');
   days.forEach((d) => svg.append('line').attr('x1', x(d.day)).attr('x2', x(d.day)).attr('y1', y(d.corrected_lo)).attr('y2', y(d.corrected_hi)).style('stroke', 'var(--series-1)').attr('stroke-width', 2).attr('stroke-opacity', 0.45));
   svg.append('path').datum(days).attr('d', d3.line().x((d) => x(d.day)).y((d) => y(d.corrected))).style('fill', 'none').style('stroke', 'var(--series-1)').attr('stroke-width', 2);
+  const pooled = days.filter((d) => d.pooled);
+  svg.append('path').datum(pooled).attr('d', d3.line().x((d) => x(d.day)).y((d) => y(d.pooled.corrected))).style('fill', 'none').style('stroke', 'var(--series-3)').attr('stroke-width', 1.25);
   days.forEach((d) => {
     svg.append('circle').attr('cx', x(d.day) + 7).attr('cy', y(d.raw_rate)).attr('r', 3).style('fill', 'var(--color-panel)').style('stroke', 'var(--color-fg-muted)').attr('stroke-width', 1.25);
     svg.append('circle').attr('cx', x(d.day)).attr('cy', y(d.corrected)).attr('r', 4.5).style('fill', 'var(--series-1)').style('stroke', 'var(--color-panel)').attr('stroke-width', 1.5);
   });
-  q.alerts.forEach((day, i) => {
-    svg.append('line').attr('x1', x(day)).attr('x2', x(day)).attr('y1', top).attr('y2', H - bottom).style('stroke', 'var(--color-bad)').attr('stroke-width', 1.5);
-    const before = x(day) > left + 90;
-    svg.append('text').attr('x', before ? x(day) - 4 : x(day) + 4).attr('y', top + 30 + i * 14).attr('text-anchor', before ? 'end' : 'start').attr('font-size', 11).attr('font-weight', 600).style('fill', 'var(--color-bad)').attr('class', 'halo').text(`⚠ alert, day ${day}`);
-  });
+  q.alerts.forEach((day) => svg.append('line').attr('x1', x(day)).attr('x2', x(day)).attr('y1', top).attr('y2', H - bottom).style('stroke', 'var(--color-bad)').attr('stroke-width', 1.5));
+  if (q.alerts.length) {
+    const ax = x(q.alerts[0]), before = ax > left + 120;
+    svg.append('text').attr('x', before ? ax - 4 : ax + 4).attr('y', top + 30).attr('text-anchor', before ? 'end' : 'start').attr('font-size', 11).attr('font-weight', 600).style('fill', 'var(--color-bad)').attr('class', 'halo qa-alert-label').text(`⚠ alert: ${dayList(q.alerts)}`);
+  }
+  svg.append('text').attr('class', 'muted halo').attr('x', left + 4).attr('y', top + 12).attr('font-size', 11).text('one illustrative run (fixed seed)');
   if (W >= 480) {
     const last = days[days.length - 1];
     const ends = [{y: y(last.corrected), text: 'Corrected estimate'}, {y: y(last.true_rate), text: 'True error rate'}, {y: y(last.raw_rate), text: 'Raw rate'}];
+    if (last.pooled) ends.push({y: y(last.pooled.corrected), text: `${q.window_days}-day pooled`});
     ends.sort((a, b) => a.y - b.y); for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 15) ends[i].y = ends[i - 1].y + 15;
     ends.forEach((e) => svg.append('text').attr('x', W - right + 8).attr('y', e.y).attr('dy', '0.35em').attr('font-size', 12).text(e.text));
   }
@@ -443,24 +461,26 @@ dash.draw('quality', (el) => {
         ['var(--series-1)', `Corrected ${pct1(d.corrected)} (95% interval ${pct1(d.corrected_lo)}–${pct1(d.corrected_hi)})`],
         [null, `Raw: ${d.errors_found} of ${d.reviewed} = ${pct1(d.errors_found / d.reviewed)}`],
         [null, `Canaries caught: ${d.canaries_caught} of ${d.canaries_seen} to date (${share(d.canaries_caught, d.canaries_seen)})`],
+        ['var(--series-3)', d.pooled ? `${q.window_days}-day pooled ${pct1(d.pooled.corrected)} (${d.pooled.found} of ${d.pooled.reviewed} found, days ${d.pooled.first_day}–${d.day})` : 'Warm-up: too few canaries for an alert'],
         [null, `True rate ${pct1(d.true_rate)}`]]);
     }).on('mouseleave', () => tip.hide());
   const last = days[days.length - 1];
   setSummary(el, `Each day ${q.slice} answers are reviewed at random; ${q.canary_per_day} of them are seeded known errors (canaries). ` +
     `The estimate is corrected for reviewer misses: the error rate in the other ${q.real_per_day} reviews divided by the share of canaries caught so far (${last.canaries_caught} of ${last.canaries_seen}, ${share(last.canaries_caught, last.canaries_seen)}, by day ${last.day}). ` +
-    `The true rate rises from day ${q.drift_start_day}. ${alertSentence(q)} Early-day intervals are wide because few canaries have been seen.`);
+    `The true rate rises from day ${q.drift_start_day}. ${alertSentence(q)} Early-day intervals are wide because few canaries have been seen. ${evalParagraph(q)}`);
 });
 dash.draw('qualityTable', (el) => {
   const q = rowsOf('quality'); el.replaceChildren(); if (!q) return;
   q.days.forEach((d) => {
-    const status = q.alerts.includes(d.day) ? (d.day < q.drift_start_day ? '⚠ Alert (before drift)' : '⚠ Alert') : d.corrected > q.alert_limit ? 'Above limit' : '';
+    const status = q.alerts.includes(d.day) ? (d.day < q.drift_start_day ? '⚠ Alert (before drift)' : '⚠ Alert') : d.pooled ? '' : 'Warm-up';
+    const pooled = d.pooled ? `${pct1(d.pooled.corrected)} (${pct1(d.pooled.lo)}–${pct1(d.pooled.hi)})` : '—';
     const tr = document.createElement('tr');
     tr.append(td(String(d.day), 'num'), td(intf(d.reviewed), 'num'), td(intf(d.errors_found), 'num'), td(pct1(d.errors_found / d.reviewed), 'num'),
-      td(`${d.canaries_caught} / ${d.canaries_seen}`, 'num'), td(pct1(d.corrected), 'num'), td(`${pct1(d.corrected_lo)}–${pct1(d.corrected_hi)}`, 'num'), td(pct1(d.true_rate), 'num'), td(status));
+      td(`${d.canaries_caught} / ${d.canaries_seen}`, 'num'), td(pct1(d.corrected), 'num'), td(`${pct1(d.corrected_lo)}–${pct1(d.corrected_hi)}`, 'num'), td(pooled, 'num'), td(pct1(d.true_rate), 'num'), td(status));
     el.appendChild(tr);
   });
 });
-const QUALITY_HEAD = '<thead><tr><th class="num">Day</th><th class="num">Reviewed</th><th class="num">Errors found</th><th class="num">Raw rate</th><th class="num">Canaries caught / seen (to date)</th><th class="num">Corrected estimate</th><th class="num">95% interval</th><th class="num">True rate</th><th>Status</th></tr></thead>';
+const QUALITY_HEAD = '<thead><tr><th class="num">Day</th><th class="num">Reviewed</th><th class="num">Errors found</th><th class="num">Raw rate</th><th class="num">Canaries caught / seen (to date)</th><th class="num">Corrected estimate</th><th class="num">95% interval</th><th class="num">3-day pooled (95% interval)</th><th class="num">True rate</th><th>Status</th></tr></thead>';
 
 /* ---------- the Summary markup (static text only; every number is filled in by the draws above) ---------- */
 /** "i" button that opens the method and caveat text for one chart. */
@@ -470,7 +490,8 @@ function infoHTML(title, html) {
 const QUALITY_INFO = `<p>Each day <b data-draw="qVal" data-k="slice">—</b> answers are reviewed at random. <b data-draw="qVal" data-k="canary_per_day">—</b> of them are seeded known errors (canaries), drawn from the same error mix and reviewed the same way, so reviewers cannot tell them apart.</p>
     <p>The estimate is corrected for reviewer misses: the error rate in the other <b data-draw="qVal" data-k="real_per_day">—</b> reviews divided by the share of canaries caught so far, capped at 100%. Lines are 95% intervals; early-day intervals are wide because few canaries have been seen. Hollow dots are the raw observed rate.</p>
     <p>Trade-off: this many canaries is more than the suite's 1 in 50, so the reviewer catch rate can be estimated, but fewer real answers get reviewed.</p>
-    <p>An alert fires when the corrected estimate stays above the limit <b data-draw="qVal" data-k="alert_days">—</b> days in a row. The dashed line is the true error rate, known only in the simulation.</p>`;
+    <p>Alert rule: once at least <b data-draw="qVal" data-k="min_canaries_for_alert">—</b> canaries have been seen, errors found over the last <b data-draw="qVal" data-k="window_days">—</b> days are pooled and corrected the same way (thin line). An alert fires on any day this pooled estimate is above the limit. The dashed line is the true error rate, known only in the simulation.</p>
+    <p>The chart shows one illustrative run (fixed seed). <span data-draw="qEval">—</span></p>`;
 const SUMMARY_INFO = {
   curve: `<p>Share of injected high-impact errors that reviewers catch. High-impact means <b data-draw="hiRuleText">—</b>.</p>
     <p>Bands show the middle 95% of simulated runs; the vertical line marks the budget set above.</p>
@@ -510,7 +531,7 @@ function summaryHTML(mode) {
   const legendM = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw thin" style="background:${METHOD_FILL['Risk-based']}"></i>Risk-based (solid)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Random sampling']}"></i>Random sampling (dashed)</span></div>`;
   const legendO = OUTCOME_LEGEND;
   const legendS = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw thin" style="background:var(--color-fg-muted)"></i>Affected answers (dotted)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Random sampling']}"></i>Random sampling (dashed)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Risk-based']}"></i>Risk-based (solid)</span></div>`;
-  const legendQ = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw" style="background:var(--series-1);border-radius:50%"></i>Corrected estimate</span><span><i class="qa-sw" style="border:1.25px solid var(--color-fg-muted);border-radius:50%"></i>Raw rate</span><span><i class="qa-sw thin" style="background:var(--color-fg)"></i>True rate (dashed)</span></div>`;
+  const legendQ = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw" style="background:var(--series-1);border-radius:50%"></i>Corrected estimate</span><span><i class="qa-sw" style="border:1.25px solid var(--color-fg-muted);border-radius:50%"></i>Raw rate</span><span><i class="qa-sw thin" style="background:var(--color-fg)"></i>True rate (dashed)</span><span><i class="qa-sw thin" style="background:var(--series-3)"></i>Pooled</span></div>`;
   return `
     <p class="qa-verdict dash-skeleton" data-draw="verdict">—</p>
     ${sliders}

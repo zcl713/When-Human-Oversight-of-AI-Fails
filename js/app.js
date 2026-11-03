@@ -49,6 +49,7 @@ dash.draw('hiTypes', (el) => {
   el.textContent = m.high_impact_types.map((id) => { const r = risks.find((x) => x.id === id); return `${id} ${r.test} (${r.area}, RPN ${r.rpn})`; }).join('; ');
 });
 dash.draw('metaVal', (el) => { const m = meta(); if (m) el.textContent = intf(m[el.dataset.k]); });
+dash.draw('qEvalRuns', (el) => { const q = rowsOf('quality'); if (q) el.textContent = intf(q.evaluation.runs); });
 dash.draw('lopaModes', (el) => { const m = meta(); if (m) el.textContent = Object.entries(m.lopa_modes).map(([k, ids]) => `${k} (${ids.join(', ')})`).join(', '); });
 
 /* ---------- register ---------- */

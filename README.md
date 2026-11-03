@@ -66,7 +66,7 @@ constant marked `ASSUMPTION` at the top of the file; the Method tab lists them a
 | `sim_grid.json` | Results for every review budget (2–30%) × reviewer catch rate (40–90%) × strategy, overall, by error type and by Lopa's mode; drives the sliders |
 | `sim_meta.json` | Definitions, defaults, team capacity, Lopa's modes, share caught at team capacity (`at_capacity`), the best achievable share (`ceiling`) per catch rate, and the assumptions list |
 | `snowball.json` | Stale-price case: outcome per strategy, time series, dependency graph |
-| `quality.json` | 14 days of the random review slice: raw rate, canaries caught / seen to date, reviewer sensitivity, the corrected estimate with its 95% interval, true rate, alert limit and alert days |
+| `quality.json` | 14 days of the random review slice (one fixed-seed run): raw rate, canaries caught / seen to date, reviewer sensitivity, the daily and 3-day pooled corrected estimates with 95% intervals, true rate, alert days under the current and old rule, and the 500-run evaluation of both rules |
 | `oversight.json` | Reviewer catch rate by condition (illustrative) |
 
 Counts are whole-number means over the runs, with the middle 95% of runs as the range; by-type
@@ -76,8 +76,15 @@ intervals (`wilson()` in `js/shared.js`), never the normal approximation.
 **Quality correction.** Each day `CANARY_PER_DAY` (4) of the 40 random reviews are seeded known errors.
 Reviewer sensitivity = canaries caught ÷ canaries seen to date. Corrected error rate = raw rate in the
 other 36 reviews ÷ sensitivity, capped at 100%; its 95% interval comes from `CORRECTION_DRAWS` (2,000)
-draws of the two Beta posteriors. The alert rule (`ALERT_DAYS` days in a row above `ALERT_LIMIT`)
-uses the corrected estimate.
+draws of the two Beta posteriors.
+
+**Quality alert rule.** No alert until `MIN_CANARIES_FOR_ALERT` (20) canaries have been seen. From then
+on, errors found and reviews are pooled over a trailing `ALERT_WINDOW_DAYS` (3) window, corrected with
+the cumulative sensitivity, and an alert fires on every day this pooled estimate is above `ALERT_LIMIT`
+(8%). The chart shows one fixed-seed run; `quality.json` also holds an `evaluation` of this rule and the
+old one (`ALERT_DAYS` days in a row on the daily estimate) over `QUALITY_EVAL_RUNS` (500) simulated
+runs: runs with a false alarm before drift, median days from drift start to the first alert after it,
+and runs with no such alert. These runs are drawn after every other output, so they change nothing else.
 
 ## Editing
 
