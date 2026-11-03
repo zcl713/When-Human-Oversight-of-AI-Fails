@@ -78,11 +78,13 @@ ASSUMPTIONS = [
     ("QUALITY_SLICE", 40, "answers a day", "ASSUMPTION: size of the daily random review slice used to estimate quality"),
     ("DRIFT_START_DAY", 9, "day", "ASSUMPTION: the true error rate starts to rise on this day"),
     ("DRIFT_PER_DAY", 0.02, "share a day", "ASSUMPTION: rise in the true error rate per day after drift starts"),
-    ("ALERT_LIMIT", 0.08, "share", "ASSUMPTION: alert limit on the estimated error rate"),
+    ("ALERT_LIMIT", 0.08, "share", "Fixed alert limit used by the previous rules, kept for comparison. It sits too close to the 6.5% baseline: the pooled rule at this limit false-alarmed before drift in about 58% of simulated runs, so the alert rule now uses a calibrated limit"),
+    ("ALERT_FALSE_ALARM_BUDGET", 0.05, "share of runs", "ASSUMPTION: at most this share of 14-day runs with no drift may raise any alert"),
+    ("ALERT_CALIBRATION", "smallest T within budget", "", "The calibrated limit T is the smallest limit (to 0.01 percentage points, rounded up) at which at most ALERT_FALSE_ALARM_BUDGET of QUALITY_EVAL_RUNS simulated no-drift runs (true rate at baseline all 14 days) have any alert day after the warm-up. T is evaluated on separate fresh runs with drift, and checked on a second fresh no-drift set; the drift runs are never used to choose T"),
     ("ALERT_DAYS", 2, "days", "OLD RULE, kept for comparison only: alert when the daily corrected estimate is above the limit this many days in a row"),
     ("MIN_CANARIES_FOR_ALERT", 20, "canaries", "ASSUMPTION: warm-up; no alert can fire until at least this many canaries have been seen in total"),
     ("ALERT_WINDOW_DAYS", 3, "days", "ASSUMPTION: trailing window for the alert estimate (the day and the days before it)"),
-    ("ALERT_RULE", "pooled window > limit", "", "Alert on any day, after the warm-up, when the pooled corrected estimate is above ALERT_LIMIT: non-canary errors found / non-canary reviews over the trailing ALERT_WINDOW_DAYS days, divided by the cumulative sensitivity (canaries caught / seen to date), capped at 100%. Every alert day is recorded"),
+    ("ALERT_RULE", "pooled window > limit", "", "Alert on any day, after the warm-up, when the pooled corrected estimate is above ALERT_LIMIT: non-canary errors found / non-canary reviews over the trailing ALERT_WINDOW_DAYS days, divided by the cumulative sensitivity (canaries caught / seen to date), capped at 100%, above the calibrated limit T. Every alert day is recorded"),
     ("QUALITY_EVAL_RUNS", 500, "runs", "Monitor evaluation: the 14-day series is simulated this many times; per rule we report the share of runs with an alert before drift starts, the median days from drift start to the first alert on or after it (alert on the drift start day = 0 days), and the share of runs with no alert on or after drift start within the window"),
     ("BANNER_MULT", 1.25, "multiplier", "ASSUMPTION (reviewer experiment only): a coverage and freshness banner raises the catch chance by 25%"),
     ("ALERT_FATIGUE_MULT", 0.6, "multiplier", "ASSUMPTION (reviewer experiment only): alerts on 40% of items cut the catch chance by 40%"),
@@ -547,13 +549,15 @@ def simulate_snowball(rng: random.Random, risk_select_p: float) -> dict:
 
 
 # ------------------------------ quality over time ------------------------------
-def quality_day(rng: random.Random, agent: list[dict], weights: list[int], day: int) -> tuple:
+def quality_day(rng: random.Random, agent: list[dict], weights: list[int], day: int,
+                drift: bool = True) -> tuple:
     """One day's random review slice: CANARY_PER_DAY seeded known errors and the rest real answers,
     shuffled together and reviewed by the one reviewer model. Returns (found, present, canaries
     caught, true rate)."""
     n_can = A["CANARY_PER_DAY"]
     n_real = A["QUALITY_SLICE"] - n_can
-    true_rate = A["ERROR_RATE"] + max(0, day - A["DRIFT_START_DAY"] + 1) * A["DRIFT_PER_DAY"]
+    rise = max(0, day - A["DRIFT_START_DAY"] + 1) * A["DRIFT_PER_DAY"] if drift else 0.0
+    true_rate = A["ERROR_RATE"] + rise
     items = [(False, rng.random() < true_rate) for _ in range(n_real)] + [(True, True)] * n_can
     rng.shuffle(items)
     found = present = can_caught = streak = 0
@@ -588,8 +592,11 @@ def beta_interval(rng: random.Random, found: int, reviewed: int, caught: int, se
     return min(point, draws[int(0.025 * (n - 1))]), max(point, draws[math.ceil(0.975 * (n - 1))])
 
 
-def alert_rules(found: list[int], caught_day: list[int]) -> dict:
-    """Both alert rules on one 14-day series of (errors found, canaries caught) per day."""
+def alert_rules(found: list[int], caught_day: list[int], limit: float | None = None) -> dict:
+    """Both alert rules on one 14-day series of (errors found, canaries caught) per day. The pooled
+    rule alerts above `limit` (default: the fixed ALERT_LIMIT); the old 2-day rule always uses
+    ALERT_LIMIT."""
+    limit = A["ALERT_LIMIT"] if limit is None else limit
     n_real, n_can, w = A["QUALITY_SLICE"] - A["CANARY_PER_DAY"], A["CANARY_PER_DAY"], A["ALERT_WINDOW_DAYS"]
     old, new, pooled, above = [], [], [], 0
     seen = caught = 0
@@ -605,7 +612,7 @@ def alert_rules(found: list[int], caught_day: list[int]) -> dict:
             est = corrected_rate(sum(win), n_real * len(win), caught, seen)
             pooled.append(dict(day=day, found=sum(win), reviewed=n_real * len(win), first_day=day - len(win) + 1,
                                canaries_caught=caught, canaries_seen=seen, estimate=est))
-            if est > A["ALERT_LIMIT"]:
+            if est > limit:
                 new.append(day)
         else:
             pooled.append(None)
@@ -669,8 +676,7 @@ def add_alert_rules(q: dict, rng: random.Random, agent: list[dict]) -> None:
                            corrected=round(p["estimate"], 4), lo=round(lo, 4), hi=round(hi, 4))
     d0 = A["DRIFT_START_DAY"]
     first_after = lambda a: next((d for d in a if d >= d0), None)  # noqa: E731
-    q.update(alerts=rules["new"], alert_day=rules["new"][0] if rules["new"] else None,
-             drift_alert_day=first_after(rules["new"]),
+    q.update(alerts_fixed=rules["new"],
              warmup_day=next(d["day"] for d in days if d["canaries_seen"] >= A["MIN_CANARIES_FOR_ALERT"]),
              min_canaries_for_alert=A["MIN_CANARIES_FOR_ALERT"], window_days=A["ALERT_WINDOW_DAYS"],
              old_rule=dict(alert_days=A["ALERT_DAYS"], alerts=rules["old"],
@@ -687,7 +693,62 @@ def add_alert_rules(q: dict, rng: random.Random, agent: list[dict]) -> None:
         r = alert_rules(found, caught)
         new_lists.append(r["new"])
         old_lists.append(r["old"])
-    q["evaluation"] = dict(runs=A["QUALITY_EVAL_RUNS"], new=rule_summary(new_lists), old=rule_summary(old_lists))
+    previous = dict(runs=A["QUALITY_EVAL_RUNS"], pooled_fixed=rule_summary(new_lists), old_2day=rule_summary(old_lists))
+    calibrate_alert_limit(q, rng, agent, previous)
+
+
+def simulate_series(rng: random.Random, agent: list[dict], drift: bool) -> tuple[list[int], list[int]]:
+    weights = [t["likelihood"] for t in agent]
+    found, caught = [], []
+    for day in range(1, A["QUALITY_DAYS"] + 1):
+        f, _, c, _ = quality_day(rng, agent, weights, day, drift)
+        found.append(f)
+        caught.append(c)
+    return found, caught
+
+
+def calibrate_alert_limit(q: dict, rng: random.Random, agent: list[dict], previous: dict) -> None:
+    """Pre-specified: T is the smallest limit at which at most ALERT_FALSE_ALARM_BUDGET of no-drift
+    runs raise any alert after the warm-up. Evaluated on fresh drift runs and a fresh no-drift set."""
+    n_runs = A["QUALITY_EVAL_RUNS"]
+    allowed = math.floor(A["ALERT_FALSE_ALARM_BUDGET"] * n_runs)
+    # 1. calibration set: no drift. A run alerts at T exactly when its highest pooled estimate is above T.
+    maxima = []
+    for _ in range(n_runs):
+        pooled = alert_rules(*simulate_series(rng, agent, drift=False))["pooled"]
+        maxima.append(max(p["estimate"] for p in pooled if p))
+    maxima.sort(reverse=True)
+    limit = math.ceil(maxima[allowed] * 10000) / 10000
+    cal_alerts = sum(1 for m in maxima if m > limit)
+    # 2. fresh drift runs: the calibrated rule and, on the same runs, the previous rules at 8%
+    cal, fixed, old = [], [], []
+    for _ in range(n_runs):
+        series = simulate_series(rng, agent, drift=True)
+        cal.append(alert_rules(*series, limit)["new"])
+        r = alert_rules(*series)
+        fixed.append(r["new"])
+        old.append(r["old"])
+    # 3. a second fresh no-drift set, as a check on the false-alarm share
+    check = sum(1 for _ in range(n_runs) if alert_rules(*simulate_series(rng, agent, drift=False), limit)["new"])
+
+    days = q["days"]
+    rules = alert_rules([d["errors_found"] for d in days], [d["canaries_caught_day"] for d in days], limit)
+    d0 = A["DRIFT_START_DAY"]
+    first_after = lambda a: next((d for d in a if d >= d0), None)  # noqa: E731
+    q.update(alert_limit=limit, alert_limit_kind="calibrated", fixed_limit=A["ALERT_LIMIT"],
+             false_alarm_budget=A["ALERT_FALSE_ALARM_BUDGET"],
+             alerts=rules["new"], alert_day=rules["new"][0] if rules["new"] else None,
+             drift_alert_day=first_after(rules["new"]))
+    q["previous_rules"] = dict(
+        pooled_fixed=dict(limit=A["ALERT_LIMIT"], alerts=q.pop("alerts_fixed")),
+        old_2day=dict(limit=A["ALERT_LIMIT"], **q.pop("old_rule")))
+    q["evaluation"] = dict(
+        runs=n_runs,
+        calibration=dict(runs=n_runs, drift=False, budget=A["ALERT_FALSE_ALARM_BUDGET"], allowed_runs=allowed,
+                         alert_runs=cal_alerts, limit=limit),
+        drift=dict(runs=n_runs, calibrated=rule_summary(cal), pooled_fixed=rule_summary(fixed), old_2day=rule_summary(old)),
+        check_no_drift=dict(runs=n_runs, drift=False, alert_runs=check),
+        previous=previous)
 
 
 # ------------------------------ reviewer experiment ------------------------------

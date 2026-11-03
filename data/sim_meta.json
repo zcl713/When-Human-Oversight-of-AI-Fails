@@ -383,7 +383,19 @@
    "name": "ALERT_LIMIT",
    "value": 0.08,
    "unit": "share",
-   "comment": "ASSUMPTION: alert limit on the estimated error rate"
+   "comment": "Fixed alert limit used by the previous rules, kept for comparison. It sits too close to the 6.5% baseline: the pooled rule at this limit false-alarmed before drift in about 58% of simulated runs, so the alert rule now uses a calibrated limit"
+  },
+  {
+   "name": "ALERT_FALSE_ALARM_BUDGET",
+   "value": 0.05,
+   "unit": "share of runs",
+   "comment": "ASSUMPTION: at most this share of 14-day runs with no drift may raise any alert"
+  },
+  {
+   "name": "ALERT_CALIBRATION",
+   "value": "smallest T within budget",
+   "unit": "",
+   "comment": "The calibrated limit T is the smallest limit (to 0.01 percentage points, rounded up) at which at most ALERT_FALSE_ALARM_BUDGET of QUALITY_EVAL_RUNS simulated no-drift runs (true rate at baseline all 14 days) have any alert day after the warm-up. T is evaluated on separate fresh runs with drift, and checked on a second fresh no-drift set; the drift runs are never used to choose T"
   },
   {
    "name": "ALERT_DAYS",
@@ -407,7 +419,7 @@
    "name": "ALERT_RULE",
    "value": "pooled window > limit",
    "unit": "",
-   "comment": "Alert on any day, after the warm-up, when the pooled corrected estimate is above ALERT_LIMIT: non-canary errors found / non-canary reviews over the trailing ALERT_WINDOW_DAYS days, divided by the cumulative sensitivity (canaries caught / seen to date), capped at 100%. Every alert day is recorded"
+   "comment": "Alert on any day, after the warm-up, when the pooled corrected estimate is above ALERT_LIMIT: non-canary errors found / non-canary reviews over the trailing ALERT_WINDOW_DAYS days, divided by the cumulative sensitivity (canaries caught / seen to date), capped at 100%, above the calibrated limit T. Every alert day is recorded"
   },
   {
    "name": "QUALITY_EVAL_RUNS",

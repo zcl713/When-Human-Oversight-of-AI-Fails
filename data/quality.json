@@ -341,42 +341,92 @@
  "canary_per_day": 4,
  "real_per_day": 36,
  "correction_draws": 2000,
- "alert_limit": 0.08,
+ "alert_limit": 0.1819,
  "drift_start_day": 9,
  "illustrative": true,
- "alerts": [
-  12,
-  13,
-  14
- ],
- "alert_day": 12,
- "drift_alert_day": 12,
  "warmup_day": 5,
  "min_canaries_for_alert": 20,
  "window_days": 3,
- "old_rule": {
-  "alert_days": 2,
-  "alerts": [
-   2
-  ],
-  "alert_day": 2,
-  "drift_alert_day": null
+ "alert_limit_kind": "calibrated",
+ "fixed_limit": 0.08,
+ "false_alarm_budget": 0.05,
+ "alerts": [],
+ "alert_day": null,
+ "drift_alert_day": null,
+ "previous_rules": {
+  "pooled_fixed": {
+   "limit": 0.08,
+   "alerts": [
+    12,
+    13,
+    14
+   ]
+  },
+  "old_2day": {
+   "limit": 0.08,
+   "alert_days": 2,
+   "alerts": [
+    2
+   ],
+   "alert_day": 2,
+   "drift_alert_day": null
+  }
  },
  "evaluation": {
   "runs": 500,
-  "new": {
+  "calibration": {
    "runs": 500,
-   "false_alarm_runs": 291,
-   "alerted_runs": 496,
-   "median_delay_days": 1.0,
-   "missed_runs": 4
+   "drift": false,
+   "budget": 0.05,
+   "allowed_runs": 25,
+   "alert_runs": 24,
+   "limit": 0.1819
   },
-  "old": {
+  "drift": {
    "runs": 500,
-   "false_alarm_runs": 282,
-   "alerted_runs": 476,
-   "median_delay_days": 2.0,
-   "missed_runs": 24
+   "calibrated": {
+    "runs": 500,
+    "false_alarm_runs": 23,
+    "alerted_runs": 230,
+    "median_delay_days": 4.0,
+    "missed_runs": 270
+   },
+   "pooled_fixed": {
+    "runs": 500,
+    "false_alarm_runs": 316,
+    "alerted_runs": 495,
+    "median_delay_days": 1,
+    "missed_runs": 5
+   },
+   "old_2day": {
+    "runs": 500,
+    "false_alarm_runs": 286,
+    "alerted_runs": 468,
+    "median_delay_days": 2.0,
+    "missed_runs": 32
+   }
+  },
+  "check_no_drift": {
+   "runs": 500,
+   "drift": false,
+   "alert_runs": 30
+  },
+  "previous": {
+   "runs": 500,
+   "pooled_fixed": {
+    "runs": 500,
+    "false_alarm_runs": 291,
+    "alerted_runs": 496,
+    "median_delay_days": 1.0,
+    "missed_runs": 4
+   },
+   "old_2day": {
+    "runs": 500,
+    "false_alarm_runs": 282,
+    "alerted_runs": 476,
+    "median_delay_days": 2.0,
+    "missed_runs": 24
+   }
   }
  }
 }
