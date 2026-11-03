@@ -203,7 +203,7 @@ dash.draw('splitTable', (el) => {
 dash.draw('snowLede', (el) => {
   const sb = rowsOf('snowball'); if (!sb) return;
   const r = sb.outcome.find((o) => o.method === 'Random sampling'), k = sb.outcome.find((o) => o.method === 'Risk-based');
-  el.textContent = `One stale mutual-fund price (test D1) feeds ${intf(r.affected)} agent answers in a day. With random sampling, ${intf(r.clients_reached[0])} of them reach clients; with risk-based review, ${intf(k.clients_reached[0])}, because the shared root cause is found and the feed is blocked.`;
+  el.textContent = `One stale fund price feeds ${intf(r.affected)} answers: ${intf(r.clients_reached[0])} reach clients under random sampling, ${intf(k.clients_reached[0])} under risk-based review.`;
 });
 let sbMethod = 'Random sampling';
 document.querySelectorAll('[data-sb]').forEach((b) => b.addEventListener('click', () => {
