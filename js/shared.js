@@ -85,6 +85,23 @@ function setSummary(el, text) {
   if (s) s.textContent = text;
 }
 function axisStyle(g) { return g.attr('font-size', null).attr('font-family', null); }
+/** Shows the card's fallback legend only when the chart is too narrow for its direct labels. */
+function fallbackLegend(el, show) {
+  const lg = el.closest('.qa-card') && el.closest('.qa-card').querySelector('.qa-legend[data-fallback]');
+  if (lg) lg.hidden = !show;
+}
+
+/* "i" info popovers are native <details>: click, Enter or Space toggles them. Escape or a click
+   elsewhere closes them, and focus returns to the "i" button. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('details.qa-info[open]').forEach((d) => {
+    const had = d.contains(document.activeElement); d.open = false; if (had) d.querySelector('summary').focus();
+  });
+});
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('details.qa-info[open]').forEach((d) => { if (!d.contains(e.target)) d.open = false; });
+});
 
 /* ---------- data access and the slider state ---------- */
 dash.calc('grid_index', {inputs: ['sim_grid'], fn: (grid) => new Map(grid.map((c) => [`${c.method}|${c.budget}|${c.catch_rate}`, c]))});
@@ -132,7 +149,7 @@ dash.draw('slider', (el) => {
   if (el.dataset.slider === 'budget') {
     el.min = m.budgets[0]; el.max = m.budgets[m.budgets.length - 1]; el.step = 1; el.value = s.budget;
     const perDay = Math.round(m.outputs_per_day * s.budget / 100);
-    out.textContent = `${s.budget}% (${perDay} reviews a day)`;
+    out.textContent = `${s.budget}% (${perDay}/day)`;
     el.setAttribute('aria-valuetext', `${s.budget} percent of answers, ${perDay} reviews a day`);
   } else {
     el.min = 0; el.max = m.catch_rates.length - 1; el.step = 1; el.value = m.catch_rates.indexOf(s.catch);
@@ -141,26 +158,23 @@ dash.draw('slider', (el) => {
   }
   el.disabled = false;
 });
-dash.draw('settingsNote', (el) => {
-  const m = meta(), s = settings(); if (!m) return;
-  const isDefault = s.budget === m.default_budget && s.catch === m.default_catch_rate;
-  el.textContent = isDefault ? 'Showing the current settings.' : `Showing ${s.budget}% budget and ${pct(s.catch)} catch rate (current settings: ${m.default_budget}% and ${pct(m.default_catch_rate)}).`;
+function isDefault() { const m = meta(), s = settings(); return !!m && s.budget === m.default_budget && s.catch === m.default_catch_rate; }
+/* Shown next to the snowball and quality charts only when the sliders differ from their fixed settings. */
+dash.draw('defaultTag', (el) => {
+  if (!meta()) return;
+  el.textContent = 'Snowball and quality charts: default settings';
+  el.classList.toggle('is-off', isDefault());
 });
+dash.draw('hiRuleText', (el) => { const m = meta(); if (m) el.textContent = hiLabel(m); });
 
 /* ---------- verdict ---------- */
+/* One sentence, at most 25 words. The weak spot and the snowball result are shown by their own blocks. */
 dash.draw('verdict', (el) => {
-  const c = current(), m = meta(), sb = rowsOf('snowball'); if (!c || !sb) return;
+  const c = current(); if (!c) return;
   done(el);
   const n = c.risk.hi.injected[0], rk = c.risk.hi.caught[0], rr = c.random.hi.caught[0];
-  const better = rk > rr ? 'Risk-based review catches more' : rk < rr ? 'Risk-based review catches fewer' : 'Risk-based review and random sampling catch the same number of';
-  const missK = c.risk.hi.missed[0];
-  const most = missK > n / 2 ? 'but both still miss most of them' : 'and misses fewer than half of them';
-  const ws = weakSpot(c.risk);
-  const sr = sb.outcome.find((o) => o.method === 'Random sampling'), sk = sb.outcome.find((o) => o.method === 'Risk-based');
-  const sbAt = c.budget === sb.budget_pct ? '' : ` (at the ${sb.budget_pct}% budget)`;
-  el.textContent = `${better} high-impact errors than random sampling for the same review effort (${rk} vs ${rr} of ${n} at a ${c.budget}% review budget), ${most}. ` +
-    `${ws.type} errors are the weakest spot: risk-based review misses ${ws.missed} of ${ws.injected}. ` +
-    `In the stale-price case${sbAt}, random sampling let ${intf(sr.clients_reached[0])} of ${intf(sr.affected)} affected answers reach clients; risk-based review traced the shared root cause and held it to ${intf(sk.clients_reached[0])}.`;
+  const most = c.risk.hi.missed[0] > n / 2 ? 'both miss most' : 'risk-based misses fewer than half';
+  el.textContent = `At a ${c.budget}% review budget, risk-based review catches ${rk} of ${n} high-impact errors versus ${rr} for random sampling; ${most}.`;
 });
 
 /* ---------- headline tiles ---------- */
@@ -183,17 +197,22 @@ dash.draw('tile', (el) => {
   el.querySelector('.r').textContent = r;
   el.title = `${method}: ${r}`;
 });
+/* Tile sub-lines: at most 5 words; the longer description is in the title (hover) text. */
 dash.draw('hiN', (el) => {
   const c = current(), m = meta(); if (!c) return;
-  el.textContent = `of ${c.risk.hi.injected[0]} injected high-impact errors (${hiLabel(m)})`;
+  el.textContent = `of ${c.risk.hi.injected[0]} injected`;
+  el.title = `of ${c.risk.hi.injected[0]} injected high-impact errors (${hiLabel(m)})`;
 });
 dash.draw('sbN', (el) => {
-  const sb = rowsOf('snowball'); if (!sb) return;
-  el.textContent = `of ${intf(sb.outcome[0].affected)} affected answers, stale-price case at ${sb.budget_pct}% budget`;
+  const sb = rowsOf('snowball'); if (!meta() || !sb) return;
+  const n = intf(sb.outcome[0].affected);
+  el.textContent = isDefault() ? `of ${n} affected answers` : `of ${n}, default settings`;
+  el.title = `of ${n} affected answers, stale-price case at ${sb.budget_pct}% budget`;
 });
 dash.draw('effortN', (el) => {
   const c = current(), m = meta(); if (!c) return;
-  el.textContent = `lower is better · ${intf(c.risk.reviewed)} reviews at ${m.min_per_review} min each, same for both`;
+  el.textContent = 'lower is better';
+  el.title = `${intf(c.risk.reviewed)} reviews at ${m.min_per_review} min each, same for both strategies`;
 });
 
 /* ---------- detection vs budget ---------- */
@@ -207,6 +226,7 @@ dash.draw('curve', (el) => {
   const ymax = Math.min(1, Math.ceil((d3.max(series, (x) => d3.max(x.pts, (p) => p.hi)) || 0.1) * 10) / 10);
   const left = Math.ceil(textWidth(svg, [pct(ymax), '0%'], 11)) + 10;
   const right = W < 480 ? 12 : Math.ceil(textWidth(svg, ['Random sampling', 'Risk-based'], 12)) + 14;
+  fallbackLegend(el, W < 480);
   const x = d3.scaleLinear([m.budgets[0], m.budgets[m.budgets.length - 1]], [left, W - right]);
   const y = d3.scaleLinear([0, ymax], [H - bottom, top]);
   axisStyle(svg.append('g').attr('transform', `translate(0,${H - bottom})`).call(d3.axisBottom(x).tickValues([2, 10, 20, 30]).tickFormat((d) => d + '%').tickSize(0).tickPadding(8)));
@@ -299,6 +319,7 @@ dash.draw('snowTime', (el) => {
   const left = Math.ceil(textWidth(svg, [intf(ts[ts.length - 1].affected)], 11)) + 10;
   const labels = ['Affected answers', 'Random sampling', 'Risk-based'];
   const right = W < 480 ? 12 : Math.ceil(textWidth(svg, labels, 12)) + 14;
+  fallbackLegend(el, W < 480);
   const x = d3.scaleLinear([0, tmax], [left, W - right]);
   const y = d3.scaleLinear([0, ts[ts.length - 1].affected], [H - bottom, top]).nice();
   axisStyle(svg.append('g').attr('transform', `translate(0,${H - bottom})`).call(d3.axisBottom(x).tickValues(d3.range(0, tmax + 1, W < 480 ? 120 : 60)).tickFormat(clock).tickSize(0).tickPadding(8)));
@@ -352,6 +373,7 @@ dash.draw('quality', (el) => {
   const ymax = Math.ceil(Math.max(d3.max(days, (d) => d.hi), d3.max(days, (d) => d.true_rate)) * 10) / 10;
   const left = Math.ceil(textWidth(svg, [pct(ymax)], 11)) + 10;
   const right = W < 480 ? 12 : Math.ceil(textWidth(svg, ['True error rate'], 12)) + 14;
+  fallbackLegend(el, W < 480);
   const x = d3.scaleLinear([0.5, days.length + 0.5], [left, W - right]);
   const y = d3.scaleLinear([0, ymax], [H - bottom, top]);
   svg.append('rect').attr('x', x(q.drift_start_day - 0.5)).attr('y', top).attr('width', x(days.length + 0.5) - x(q.drift_start_day - 0.5)).attr('height', H - bottom - top).style('fill', 'var(--cds-chart-grid)').style('fill-opacity', 0.6);
@@ -387,13 +409,29 @@ dash.draw('quality', (el) => {
 });
 
 /* ---------- the Summary markup (static text only; every number is filled in by the draws above) ---------- */
+/** "i" button that opens the method and caveat text for one chart. */
+function infoHTML(title, html) {
+  return `<details class="qa-info"><summary aria-label="How to read this: ${title}" title="How to read this">i</summary><div class="qa-info-pop">${html}</div></details>`;
+}
+const SUMMARY_INFO = {
+  curve: `<p>Share of injected high-impact errors that reviewers catch. High-impact means <b data-draw="hiRuleText">—</b>.</p>
+    <p>Bands show the middle 95% of simulated runs; the vertical line marks the budget set above.</p>
+    <p>The thin dotted line is the team's daily capacity; past it, reviews get less careful, so more budget stops helping.</p>`,
+  byType: `<p>Each bar splits the high-impact errors of one type into caught, reviewed but not caught, and never selected for review. Errors missed = never selected + reviewed but not caught.</p>
+    <p>The weak spot (red outline) is the type risk-based review misses most often.</p>`,
+  snowTime: `<p>One stale fund price (test D1) feeds every answer about that fund. Random sampling fixes each catch as a one-off; risk-based review links the clustered freshness flags to the feed and blocks later answers.</p>
+    <p>The stale feed starts at 0h. Lines are averages over simulated days; bands are the middle 95%.</p>`,
+  quality: `<p>A small random review slice each day estimates the error rate. An alert fires when the estimate stays above the limit.</p>
+    <p>Dots are the daily estimate; lines are 95% Wilson intervals. The dashed line is the true error rate, known only in the simulation.</p>
+    <p>The estimate sits below the true rate because reviewers miss some errors.</p>`,
+};
 function summaryHTML(mode) {
   const lean = mode === 'lean';
   const tile = (label, key, sub) => `
     <div class="qa-kpi qa-tile">
       <span class="qa-kpi-label">${label}</span>
       <dl class="qa-tile-vals">
-        ${METHODS.map((m) => `<div class="qa-tile-row dash-skeleton" data-draw="tile" data-tile="${key}" data-m="${m}"><dt><i class="qa-sw thin" style="background:${METHOD_FILL[m]}"></i>${m}</dt><dd class="v">—</dd><dd class="r"></dd></div>`).join('')}
+        ${METHODS.map((m) => `<div class="qa-tile-row dash-skeleton" data-draw="tile" data-tile="${key}" data-m="${m}"><dt><i class="qa-sw thin" style="background:${METHOD_FILL[m]}"></i>${m === 'Random sampling' ? 'Random' : m}</dt><dd class="v">—</dd><dd class="r sr-only"></dd></div>`).join('')}
       </dl>
       <span class="qa-kpi-sub" data-draw="${sub}">—</span>
     </div>`;
@@ -402,20 +440,19 @@ function summaryHTML(mode) {
       <label class="qa-slider"><span>Review budget <output>—</output></span><input type="range" data-draw="slider" data-slider="budget" disabled></label>
       <label class="qa-slider"><span>Reviewer catch rate <output>—</output></span><input type="range" data-draw="slider" data-slider="catch" disabled></label>
       <button class="qa-chip" type="button" data-reset>Reset</button>
-      <span class="qa-note" data-draw="settingsNote"></span>
     </div>`;
-  const card = (id, title, note, draw, extra = '', tall = lean) => `
+  const card = (id, title, draw, legend = '', tall = lean) => `
     <div class="qa-card" id="${id}">
-      <h2>${title}</h2>
-      ${note ? `<p class="qa-note">${note}</p>` : ''}
-      ${extra}
+      <div class="qa-titlerow"><h2>${title}</h2>${infoHTML(title, SUMMARY_INFO[draw])}</div>
+      ${legend}
       <div class="qa-chart dash-skeleton${tall ? ' tall' : ''}" data-draw="${draw}"${draw === 'byType' ? ' style="min-height:0"' : ''}></div>
       <p class="qa-chart-summary"></p>
     </div>`;
-  const legendM = `<div class="qa-legend"><span><i class="qa-sw thin" style="background:${METHOD_FILL['Risk-based']}"></i>Risk-based (solid)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Random sampling']}"></i>Random sampling (dashed)</span></div>`;
-  const legendO = `<div class="qa-legend">${Object.keys(OUTCOME_FILL).map((k) => `<span><i class="qa-sw" style="background:${OUTCOME_FILL[k]}"></i>${OUTCOME_LABEL[k]}</span>`).join('')}</div>`;
-  const legendS = `<div class="qa-legend"><span><i class="qa-sw thin" style="background:var(--color-fg-muted)"></i>Affected answers (dotted)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Random sampling']}"></i>Random sampling: reached clients (dashed)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Risk-based']}"></i>Risk-based: reached clients (solid)</span></div>`;
-  const legendQ = `<div class="qa-legend"><span><i class="qa-sw" style="background:var(--series-1);border-radius:50%"></i>Estimate from the daily random review, with 95% Wilson interval</span><span><i class="qa-sw thin" style="background:var(--color-fg)"></i>True error rate (dashed; known only in the simulation)</span><span><i class="qa-sw thin" style="background:var(--color-bad)"></i>Alert limit</span></div>`;
+  // Fallback legends appear only when the chart is too narrow for its direct labels.
+  const legendM = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw thin" style="background:${METHOD_FILL['Risk-based']}"></i>Risk-based (solid)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Random sampling']}"></i>Random sampling (dashed)</span></div>`;
+  const legendO = `<div class="qa-legend"><span><i class="qa-sw" style="background:${OUTCOME_FILL.caught}"></i>Caught</span><span><i class="qa-sw" style="background:${OUTCOME_FILL.reviewed_not_caught}"></i>Reviewed, not caught</span><span><i class="qa-sw" style="background:${OUTCOME_FILL.never_selected}"></i>Never selected</span></div>`;
+  const legendS = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw thin" style="background:var(--color-fg-muted)"></i>Affected answers (dotted)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Random sampling']}"></i>Random sampling (dashed)</span><span><i class="qa-sw thin" style="background:${METHOD_FILL['Risk-based']}"></i>Risk-based (solid)</span></div>`;
+  const legendQ = `<div class="qa-legend" data-fallback hidden><span><i class="qa-sw" style="background:var(--series-1);border-radius:50%"></i>Estimate</span><span><i class="qa-sw thin" style="background:var(--color-fg)"></i>True error rate (dashed)</span></div>`;
   return `
     <p class="qa-verdict dash-skeleton" data-draw="verdict">—</p>
     ${sliders}
@@ -426,12 +463,13 @@ function summaryHTML(mode) {
       ${tile('Clients reached before containment', 'snowball', 'sbN')}
     </div>
     <div class="${lean ? 'qa-stack' : 'qa-grid'}">
-      ${card('s-curve', 'High-impact errors caught as the review budget grows', lean ? 'Share of injected high-impact errors that reviewers catch. Bands show the middle 95% of simulated runs; the vertical line marks the budget set above.' : '', 'curve', legendM)}
-      ${card('s-type', 'Where high-impact errors are missed, by error type', lean ? 'Each bar splits the high-impact errors of one type into caught, reviewed but not caught, and never selected for review. Errors missed = never selected + reviewed but not caught. The weak spot (red outline) is the type risk-based review misses most often.' : '', 'byType', legendO, false)}
+      ${card('s-curve', 'High-impact errors caught vs budget', 'curve', legendM)}
+      ${card('s-type', 'Missed high-impact errors by type', 'byType', legendO, false)}
     </div>
+    <p class="qa-tag is-off" data-draw="defaultTag"></p>
     <div class="${lean ? 'qa-stack' : 'qa-grid'}">
-      ${card('s-snow', 'Stale-price snowball: clients reached over the day', lean ? 'One stale fund price (test D1) feeds every answer about that fund. Random sampling fixes each catch as a one-off; risk-based review links the clustered freshness flags to the feed and blocks later answers.' : '', 'snowTime', legendS)}
-      ${card('s-quality', 'Quality estimate vs the true error rate', lean ? 'A small random review slice each day estimates the error rate. An alert fires when the estimate stays above the limit.' : '', 'quality', legendQ)}
+      ${card('s-snow', 'Stale-price case: clients reached', 'snowTime', legendS)}
+      ${card('s-quality', 'Error-rate estimate vs true rate', 'quality', legendQ)}
     </div>`;
 }
 document.querySelectorAll('[data-summary-root]').forEach((root) => { root.innerHTML = summaryHTML(root.dataset.mode); });

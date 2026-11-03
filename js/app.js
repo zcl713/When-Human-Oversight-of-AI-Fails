@@ -44,7 +44,6 @@ dash.draw('kpi', (el) => {
   const v = r[0][el.dataset.field]; el.textContent = v == null ? '—' : (el.dataset.field === 'avg_rpn' ? num1 : intf)(v);
 });
 dash.draw('hiRule', (el) => { const m = meta(); if (m) el.textContent = `agent failure types with ${hiLabel(m)}`; });
-dash.draw('hiRuleText', (el) => { const m = meta(); if (m) el.textContent = hiLabel(m); });
 dash.draw('hiTypes', (el) => {
   const m = meta(), risks = rowsOf('risks'); if (!m || !risks) return;
   el.textContent = m.high_impact_types.map((id) => { const r = risks.find((x) => x.id === id); return `${id} ${r.test} (${r.area}, RPN ${r.rpn})`; }).join('; ');
