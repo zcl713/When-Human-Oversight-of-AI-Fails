@@ -80,11 +80,16 @@ draws of the two Beta posteriors.
 
 **Quality alert rule.** No alert until `MIN_CANARIES_FOR_ALERT` (20) canaries have been seen. From then
 on, errors found and reviews are pooled over a trailing `ALERT_WINDOW_DAYS` (3) window, corrected with
-the cumulative sensitivity, and an alert fires on every day this pooled estimate is above `ALERT_LIMIT`
-(8%). The chart shows one fixed-seed run; `quality.json` also holds an `evaluation` of this rule and the
-old one (`ALERT_DAYS` days in a row on the daily estimate) over `QUALITY_EVAL_RUNS` (500) simulated
-runs: runs with a false alarm before drift, median days from drift start to the first alert after it,
-and runs with no such alert. These runs are drawn after every other output, so they change nothing else.
+the cumulative sensitivity, and an alert fires on every day this pooled estimate is above a calibrated
+limit T. An initial fixed 8% limit (`ALERT_LIMIT`) sat too close to the 6.5% baseline and produced about
+58% false alarms before drift, so the limit was recalibrated to a stated false-alarm budget
+(`ALERT_FALSE_ALARM_BUDGET`, 5%): T is the smallest limit at which at most 5% of 500 simulated runs
+without drift raise any alert after the warm-up. T is evaluated on a separate set of 500 fresh runs with
+drift (false alarms before drift, median days from drift start to the first alert after it, runs with
+no such alert) and checked on a second fresh no-drift set; the drift runs are never used to choose T.
+`quality.json` keeps the previous rules (pooled at 8%, and `ALERT_DAYS` days in a row at 8%) and their
+numbers for comparison. The chart shows one fixed-seed run. All these runs are drawn after every other
+output, so they change nothing else.
 
 ## Editing
 

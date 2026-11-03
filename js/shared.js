@@ -395,22 +395,28 @@ function dayList(days) {
 }
 /** The monitor evaluation across simulated runs, for one rule. Percentages are runs / total runs. */
 function evalSentence(e) {
-  const med = e.median_delay_days == null ? 'never' : `in a median of ${e.median_delay_days} day${e.median_delay_days === 1 ? '' : 's'} after it starts`;
-  return `false alarm before drift in ${share(e.false_alarm_runs, e.runs)} (${e.false_alarm_runs} of ${e.runs}); drift alerted ${med}; missed within the window in ${share(e.missed_runs, e.runs)} (${e.missed_runs} of ${e.runs})`;
+  const med = e.median_delay_days == null ? 'never alerted'
+    : `alerted in a median of ${e.median_delay_days} day${e.median_delay_days === 1 ? '' : 's'} after it starts (in the ${e.alerted_runs} runs that alert)`;
+  return `false alarm before drift in ${share(e.false_alarm_runs, e.runs)} (${e.false_alarm_runs} of ${e.runs}); drift ${med}; missed within the window in ${share(e.missed_runs, e.runs)} (${e.missed_runs} of ${e.runs})`;
 }
 function evalParagraph(q) {
-  return `Across ${q.evaluation.runs} simulated runs: ${evalSentence(q.evaluation.new)}. ` +
-    `Old rule (${q.old_rule.alert_days} days in a row above the limit on the daily estimate, no warm-up): ${evalSentence(q.evaluation.old)}.`;
+  const e = q.evaluation, c = e.calibration, ch = e.check_no_drift, old = q.previous_rules.old_2day;
+  return `The limit (${pct1(q.alert_limit)}) is calibrated to a ${pct(q.false_alarm_budget)} false-alarm budget: the smallest limit at which at most ${c.allowed_runs} of ${c.runs} simulated runs without drift raise any alert (${c.alert_runs} did). ` +
+    `On ${e.drift.runs} fresh runs with drift: ${evalSentence(e.drift.calibrated)}. ` +
+    `A second fresh set without drift raised an alert in ${share(ch.alert_runs, ch.runs)} (${ch.alert_runs} of ${ch.runs}). ` +
+    `Previous rules on the same drift runs: 3-day pooled at ${pct(q.fixed_limit)}: ${evalSentence(e.drift.pooled_fixed)}; ${old.alert_days} days in a row at ${pct(q.fixed_limit)}: ${evalSentence(e.drift.old_2day)}.`;
 }
 function alertSentence(q) {
-  const lim = pct(q.alert_limit), d0 = q.drift_start_day;
+  const lim = pct1(q.alert_limit), d0 = q.drift_start_day;
   const head = `On this illustrative run (fixed seed), alerts are possible from day ${q.warmup_day}, once ${q.min_canaries_for_alert} canaries have been seen. `;
-  if (!q.alerts.length) return head + `The pooled ${q.window_days}-day estimate never goes above the ${lim} limit, so no alert fires and the drift is missed.`;
+  if (!q.alerts.length) return head + `The pooled ${q.window_days}-day estimate never goes above the calibrated ${lim} limit, so no alert fires: the drift is not alerted on this run.`;
   const early = q.alerts.filter((d) => d < d0);
-  return head + `The pooled ${q.window_days}-day estimate is above the ${lim} limit on ${dayList(q.alerts)}` +
+  return head + `The pooled ${q.window_days}-day estimate is above the calibrated ${lim} limit on ${dayList(q.alerts)}` +
     (early.length ? `, including ${dayList(early)} before drift starts (a false alarm)` : '') + '; ' +
-    (q.drift_alert_day ? `the drift is alerted on day ${q.drift_alert_day}, ${q.drift_alert_day - d0} days after it starts on day ${d0}.` : `the drift is not alerted within the window.`);
+    (q.drift_alert_day ? `the drift is alerted on day ${q.drift_alert_day}, ${q.drift_alert_day - d0} days after it starts on day ${d0}.` : `the drift is not alerted on this run.`);
 }
+dash.draw('qLimit', (el) => { const q = rowsOf('quality'); if (q) el.textContent = pct1(q.alert_limit); });
+dash.draw('qBudget', (el) => { const q = rowsOf('quality'); if (q) el.textContent = pct(q.false_alarm_budget); });
 dash.draw('qEval', (el) => { const q = rowsOf('quality'); if (q) el.textContent = evalParagraph(q); });
 dash.draw('quality', (el) => {
   if (failed('quality')) return showFail(el);
@@ -418,7 +424,7 @@ dash.draw('quality', (el) => {
   const days = q.days;
   const W = el.clientWidth, H = el.classList.contains('tall') ? 300 : 250, top = 16, bottom = 30;
   const svg = svgFor(el, W, H, 'Chart: daily error rate corrected for reviewer misses with 95% intervals, the raw observed rate, the true error rate, and the alert limit');
-  const ymax = Math.ceil(Math.max(d3.max(days, (d) => d.corrected_hi), d3.max(days, (d) => d.true_rate)) * 10) / 10;
+  const ymax = Math.ceil(Math.max(d3.max(days, (d) => d.corrected_hi), d3.max(days, (d) => d.true_rate), q.alert_limit * 1.1) * 10) / 10;
   const left = Math.ceil(textWidth(svg, [pct(ymax)], 11)) + 10;
   const labels = ['Corrected estimate', 'True error rate', 'Raw rate', `${q.window_days}-day pooled`];
   const right = W < 480 ? 12 : Math.ceil(textWidth(svg, labels, 12)) + 14;
@@ -430,7 +436,7 @@ dash.draw('quality', (el) => {
   axisStyle(svg.append('g').attr('transform', `translate(0,${H - bottom})`).call(d3.axisBottom(x).tickValues(days.map((d) => d.day)).tickFormat((d) => (W >= 600 ? 'Day ' + d : String(d))).tickSize(0).tickPadding(8)));
   axisStyle(svg.append('g').attr('transform', `translate(${left},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(pct).tickSize(-(W - right - left))));
   svg.append('line').attr('x1', left).attr('x2', W - right).attr('y1', y(q.alert_limit)).attr('y2', y(q.alert_limit)).style('stroke', 'var(--color-bad)').attr('stroke-dasharray', '5 3').attr('stroke-width', 1.5);
-  svg.append('text').attr('x', left + 4).attr('y', y(q.alert_limit) - 5).attr('font-size', 11).style('fill', 'var(--color-bad)').attr('class', 'halo').text(`alert limit ${pct(q.alert_limit)}`);
+  svg.append('text').attr('x', left + 4).attr('y', y(q.alert_limit) - 5).attr('font-size', 11).style('fill', 'var(--color-bad)').attr('class', 'halo qa-limit-label').text(`alert limit (calibrated) ${pct1(q.alert_limit)}`);
   svg.append('path').datum(days).attr('d', d3.line().x((d) => x(d.day)).y((d) => y(d.true_rate))).style('fill', 'none').style('stroke', 'var(--color-fg)').attr('stroke-width', 1.5).attr('stroke-dasharray', '6 4');
   days.forEach((d) => svg.append('line').attr('x1', x(d.day)).attr('x2', x(d.day)).attr('y1', y(d.corrected_lo)).attr('y2', y(d.corrected_hi)).style('stroke', 'var(--series-1)').attr('stroke-width', 2).attr('stroke-opacity', 0.45));
   svg.append('path').datum(days).attr('d', d3.line().x((d) => x(d.day)).y((d) => y(d.corrected))).style('fill', 'none').style('stroke', 'var(--series-1)').attr('stroke-width', 2);
@@ -490,7 +496,7 @@ function infoHTML(title, html) {
 const QUALITY_INFO = `<p>Each day <b data-draw="qVal" data-k="slice">—</b> answers are reviewed at random. <b data-draw="qVal" data-k="canary_per_day">—</b> of them are seeded known errors (canaries), drawn from the same error mix and reviewed the same way, so reviewers cannot tell them apart.</p>
     <p>The estimate is corrected for reviewer misses: the error rate in the other <b data-draw="qVal" data-k="real_per_day">—</b> reviews divided by the share of canaries caught so far, capped at 100%. Lines are 95% intervals; early-day intervals are wide because few canaries have been seen. Hollow dots are the raw observed rate.</p>
     <p>Trade-off: this many canaries is more than the suite's 1 in 50, so the reviewer catch rate can be estimated, but fewer real answers get reviewed.</p>
-    <p>Alert rule: once at least <b data-draw="qVal" data-k="min_canaries_for_alert">—</b> canaries have been seen, errors found over the last <b data-draw="qVal" data-k="window_days">—</b> days are pooled and corrected the same way (thin line). An alert fires on any day this pooled estimate is above the limit. The dashed line is the true error rate, known only in the simulation.</p>
+    <p>Alert rule: once at least <b data-draw="qVal" data-k="min_canaries_for_alert">—</b> canaries have been seen, errors found over the last <b data-draw="qVal" data-k="window_days">—</b> days are pooled and corrected the same way (thin line). An alert fires on any day this pooled estimate is above the calibrated limit. The dashed line is the true error rate, known only in the simulation.</p>
     <p>The chart shows one illustrative run (fixed seed). <span data-draw="qEval">—</span></p>`;
 const SUMMARY_INFO = {
   curve: `<p>Share of injected high-impact errors that reviewers catch. High-impact means <b data-draw="hiRuleText">—</b>.</p>
