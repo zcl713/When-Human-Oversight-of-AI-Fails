@@ -79,7 +79,11 @@ ASSUMPTIONS = [
     ("DRIFT_START_DAY", 9, "day", "ASSUMPTION: the true error rate starts to rise on this day"),
     ("DRIFT_PER_DAY", 0.02, "share a day", "ASSUMPTION: rise in the true error rate per day after drift starts"),
     ("ALERT_LIMIT", 0.08, "share", "ASSUMPTION: alert limit on the estimated error rate"),
-    ("ALERT_DAYS", 2, "days", "ASSUMPTION: alert when the estimate is above the limit this many days in a row"),
+    ("ALERT_DAYS", 2, "days", "OLD RULE, kept for comparison only: alert when the daily corrected estimate is above the limit this many days in a row"),
+    ("MIN_CANARIES_FOR_ALERT", 20, "canaries", "ASSUMPTION: warm-up; no alert can fire until at least this many canaries have been seen in total"),
+    ("ALERT_WINDOW_DAYS", 3, "days", "ASSUMPTION: trailing window for the alert estimate (the day and the days before it)"),
+    ("ALERT_RULE", "pooled window > limit", "", "Alert on any day, after the warm-up, when the pooled corrected estimate is above ALERT_LIMIT: non-canary errors found / non-canary reviews over the trailing ALERT_WINDOW_DAYS days, divided by the cumulative sensitivity (canaries caught / seen to date), capped at 100%. Every alert day is recorded"),
+    ("QUALITY_EVAL_RUNS", 500, "runs", "Monitor evaluation: the 14-day series is simulated this many times; per rule we report the share of runs with an alert before drift starts, the median days from drift start to the first alert on or after it (alert on the drift start day = 0 days), and the share of runs with no alert on or after drift start within the window"),
     ("BANNER_MULT", 1.25, "multiplier", "ASSUMPTION (reviewer experiment only): a coverage and freshness banner raises the catch chance by 25%"),
     ("ALERT_FATIGUE_MULT", 0.6, "multiplier", "ASSUMPTION (reviewer experiment only): alerts on 40% of items cut the catch chance by 40%"),
     ("EXPERIMENT_ITEMS", 60, "items per condition", "ASSUMPTION: planted errors shown per condition in the reviewer experiment"),
@@ -543,52 +547,102 @@ def simulate_snowball(rng: random.Random, risk_select_p: float) -> dict:
 
 
 # ------------------------------ quality over time ------------------------------
+def quality_day(rng: random.Random, agent: list[dict], weights: list[int], day: int) -> tuple:
+    """One day's random review slice: CANARY_PER_DAY seeded known errors and the rest real answers,
+    shuffled together and reviewed by the one reviewer model. Returns (found, present, canaries
+    caught, true rate)."""
+    n_can = A["CANARY_PER_DAY"]
+    n_real = A["QUALITY_SLICE"] - n_can
+    true_rate = A["ERROR_RATE"] + max(0, day - A["DRIFT_START_DAY"] + 1) * A["DRIFT_PER_DAY"]
+    items = [(False, rng.random() < true_rate) for _ in range(n_real)] + [(True, True)] * n_can
+    rng.shuffle(items)
+    found = present = can_caught = streak = 0
+    for canary, is_err in items:
+        if not is_err:
+            streak += 1
+            continue
+        t = rng.choices(agent, weights)[0]
+        plausible = rng.random() < A["PLAUSIBLE_BY_DETECTABILITY"][t["detectability"]]
+        hit = rng.random() < catch_prob(A["BASE_CATCH"], streak, A["QUALITY_SLICE"], plausible)
+        streak = 0
+        if canary:
+            can_caught += hit
+        else:
+            present += 1
+            found += hit
+    return found, present, can_caught, true_rate
+
+
+def corrected_rate(found: int, reviewed: int, caught: int, seen: int) -> float:
+    sens = caught / seen
+    return min(1.0, (found / reviewed) / sens) if sens else (1.0 if found else 0.0)
+
+
+def beta_interval(rng: random.Random, found: int, reviewed: int, caught: int, seen: int,
+                  point: float) -> tuple[float, float]:
+    """95% interval for the corrected rate: Beta draws for the observed rate and for sensitivity.
+    Widened to include the point estimate when it falls outside (0 found)."""
+    n = A["CORRECTION_DRAWS"]
+    draws = sorted(min(1.0, rng.betavariate(found + 1, reviewed - found + 1)
+                       / rng.betavariate(caught + 1, seen - caught + 1)) for _ in range(n))
+    return min(point, draws[int(0.025 * (n - 1))]), max(point, draws[math.ceil(0.975 * (n - 1))])
+
+
+def alert_rules(found: list[int], caught_day: list[int]) -> dict:
+    """Both alert rules on one 14-day series of (errors found, canaries caught) per day."""
+    n_real, n_can, w = A["QUALITY_SLICE"] - A["CANARY_PER_DAY"], A["CANARY_PER_DAY"], A["ALERT_WINDOW_DAYS"]
+    old, new, pooled, above = [], [], [], 0
+    seen = caught = 0
+    for i, f in enumerate(found):
+        day = i + 1
+        seen += n_can
+        caught += caught_day[i]
+        above = above + 1 if corrected_rate(f, n_real, caught, seen) > A["ALERT_LIMIT"] else 0
+        if above >= A["ALERT_DAYS"]:
+            old.append(day)
+        if seen >= A["MIN_CANARIES_FOR_ALERT"]:
+            win = found[max(0, i - w + 1): i + 1]
+            est = corrected_rate(sum(win), n_real * len(win), caught, seen)
+            pooled.append(dict(day=day, found=sum(win), reviewed=n_real * len(win), first_day=day - len(win) + 1,
+                               canaries_caught=caught, canaries_seen=seen, estimate=est))
+            if est > A["ALERT_LIMIT"]:
+                new.append(day)
+        else:
+            pooled.append(None)
+    return dict(old=old, new=new, pooled=pooled)
+
+
+def rule_summary(alert_lists: list[list[int]]) -> dict:
+    """False alarms before drift, delay from drift start to the first alert on or after it, misses."""
+    d0 = A["DRIFT_START_DAY"]
+    delays = [next(d for d in a if d >= d0) - d0 for a in alert_lists if any(d >= d0 for d in a)]
+    s = sorted(delays)
+    median = None if not s else (s[len(s) // 2] if len(s) % 2 else (s[len(s) // 2 - 1] + s[len(s) // 2]) / 2)
+    return dict(runs=len(alert_lists),
+                false_alarm_runs=sum(1 for a in alert_lists if any(d < d0 for d in a)),
+                alerted_runs=len(delays), median_delay_days=median,
+                missed_runs=len(alert_lists) - len(delays))
+
+
 def simulate_quality(rng: random.Random, agent: list[dict]) -> dict:
-    """One seeded 14-day realization. Each day's random slice holds CANARY_PER_DAY seeded known
-    errors and QUALITY_SLICE - CANARY_PER_DAY real answers, shuffled together. Real errors and
-    canaries come from the natural likelihood-weighted mix (no oversampling) and go through the same
-    reviewer model, so a reviewer cannot tell them apart. The error rate is corrected for reviewer
-    misses with the sensitivity measured on the canaries."""
+    """One seeded 14-day realization, shown on the chart. Real errors and canaries come from the
+    natural likelihood-weighted mix (no oversampling) and go through the same reviewer model, so a
+    reviewer cannot tell them apart. The error rate is corrected for reviewer misses with the
+    sensitivity measured on the canaries."""
     weights = [t["likelihood"] for t in agent]
     n_can = A["CANARY_PER_DAY"]
     n_real = A["QUALITY_SLICE"] - n_can
-    n_draws = A["CORRECTION_DRAWS"]
-    days, above, alert_day, alerts = [], 0, None, []
+    days = []
     seen = caught_cum = 0
     for day in range(1, A["QUALITY_DAYS"] + 1):
-        true_rate = A["ERROR_RATE"] + max(0, day - A["DRIFT_START_DAY"] + 1) * A["DRIFT_PER_DAY"]
-        items = [(False, rng.random() < true_rate) for _ in range(n_real)] + [(True, True)] * n_can
-        rng.shuffle(items)
-        found = present = can_caught = streak = 0
-        for canary, is_err in items:
-            if not is_err:
-                streak += 1
-                continue
-            t = rng.choices(agent, weights)[0]
-            plausible = rng.random() < A["PLAUSIBLE_BY_DETECTABILITY"][t["detectability"]]
-            hit = rng.random() < catch_prob(A["BASE_CATCH"], streak, A["QUALITY_SLICE"], plausible)
-            streak = 0
-            if canary:
-                can_caught += hit
-            else:
-                present += 1
-                found += hit
+        found, present, can_caught, true_rate = quality_day(rng, agent, weights, day)
         seen += n_can
         caught_cum += can_caught
         raw = found / n_real
         sens = caught_cum / seen
-        corrected = min(1.0, raw / sens) if sens else (1.0 if found else 0.0)
-        draws = sorted(min(1.0, rng.betavariate(found + 1, n_real - found + 1)
-                           / rng.betavariate(caught_cum + 1, seen - caught_cum + 1))
-                       for _ in range(n_draws))
-        # the interval is widened to include the point estimate when it falls outside (0 found)
-        lo = min(corrected, draws[int(0.025 * (n_draws - 1))])
-        hi = max(corrected, draws[math.ceil(0.975 * (n_draws - 1))])
+        corrected = corrected_rate(found, n_real, caught_cum, seen)
+        lo, hi = beta_interval(rng, found, n_real, caught_cum, seen, corrected)
         s_lo, s_hi = wilson(caught_cum, seen)
-        above = above + 1 if corrected > A["ALERT_LIMIT"] else 0
-        if above >= A["ALERT_DAYS"]:
-            alerts.append(day)
-            alert_day = alert_day or day
         days.append(dict(day=day, reviewed=n_real, errors_found=found, errors_present=present,
                          raw_rate=round(raw, 4), canaries_day=n_can, canaries_caught_day=can_caught,
                          canaries_seen=seen, canaries_caught=caught_cum,
@@ -596,10 +650,44 @@ def simulate_quality(rng: random.Random, agent: list[dict]) -> dict:
                          corrected=round(corrected, 4), corrected_lo=round(lo, 4), corrected_hi=round(hi, 4),
                          true_rate=round(true_rate, 4)))
     return dict(days=days, slice=A["QUALITY_SLICE"], canary_per_day=n_can, real_per_day=n_real,
-                correction_draws=n_draws, alert_limit=A["ALERT_LIMIT"], alert_days=A["ALERT_DAYS"],
-                drift_start_day=A["DRIFT_START_DAY"], alert_day=alert_day, alerts=alerts,
-                drift_alert_day=next((d for d in alerts if d >= A["DRIFT_START_DAY"]), None),
-                illustrative=True)
+                correction_draws=A["CORRECTION_DRAWS"], alert_limit=A["ALERT_LIMIT"],
+                drift_start_day=A["DRIFT_START_DAY"], illustrative=True)
+
+
+def add_alert_rules(q: dict, rng: random.Random, agent: list[dict]) -> None:
+    """Applies the alert rule (and the old one, for comparison) to the illustrative run, then
+    evaluates both rules over QUALITY_EVAL_RUNS simulated 14-day series. Runs last so the draws
+    behind every other output are unchanged."""
+    days = q["days"]
+    rules = alert_rules([d["errors_found"] for d in days], [d["canaries_caught_day"] for d in days])
+    for d, p in zip(days, rules["pooled"]):
+        if p is None:
+            d["pooled"] = None
+            continue
+        lo, hi = beta_interval(rng, p["found"], p["reviewed"], p["canaries_caught"], p["canaries_seen"], p["estimate"])
+        d["pooled"] = dict(first_day=p["first_day"], found=p["found"], reviewed=p["reviewed"],
+                           corrected=round(p["estimate"], 4), lo=round(lo, 4), hi=round(hi, 4))
+    d0 = A["DRIFT_START_DAY"]
+    first_after = lambda a: next((d for d in a if d >= d0), None)  # noqa: E731
+    q.update(alerts=rules["new"], alert_day=rules["new"][0] if rules["new"] else None,
+             drift_alert_day=first_after(rules["new"]),
+             warmup_day=next(d["day"] for d in days if d["canaries_seen"] >= A["MIN_CANARIES_FOR_ALERT"]),
+             min_canaries_for_alert=A["MIN_CANARIES_FOR_ALERT"], window_days=A["ALERT_WINDOW_DAYS"],
+             old_rule=dict(alert_days=A["ALERT_DAYS"], alerts=rules["old"],
+                           alert_day=rules["old"][0] if rules["old"] else None,
+                           drift_alert_day=first_after(rules["old"])))
+    weights = [t["likelihood"] for t in agent]
+    new_lists, old_lists = [], []
+    for _ in range(A["QUALITY_EVAL_RUNS"]):
+        found, caught = [], []
+        for day in range(1, A["QUALITY_DAYS"] + 1):
+            f, _, c, _ = quality_day(rng, agent, weights, day)
+            found.append(f)
+            caught.append(c)
+        r = alert_rules(found, caught)
+        new_lists.append(r["new"])
+        old_lists.append(r["old"])
+    q["evaluation"] = dict(runs=A["QUALITY_EVAL_RUNS"], new=rule_summary(new_lists), old=rule_summary(old_lists))
 
 
 # ------------------------------ reviewer experiment ------------------------------
@@ -638,6 +726,8 @@ def main(xlsx: Path, out: Path) -> None:
     snowball = simulate_snowball(rng, risk_select_p)
     quality = simulate_quality(rng, agent)
     oversight = simulate_oversight(rng)
+    log.info("evaluating the quality alert rules over %d runs", A["QUALITY_EVAL_RUNS"])
+    add_alert_rules(quality, rng, agent)
 
     meta = dict(
         seed=SEED, n_runs=N_RUNS, high_impact_rpn=HIGH_IMPACT_RPN,

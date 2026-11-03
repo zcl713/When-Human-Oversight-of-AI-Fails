@@ -389,7 +389,31 @@
    "name": "ALERT_DAYS",
    "value": 2,
    "unit": "days",
-   "comment": "ASSUMPTION: alert when the estimate is above the limit this many days in a row"
+   "comment": "OLD RULE, kept for comparison only: alert when the daily corrected estimate is above the limit this many days in a row"
+  },
+  {
+   "name": "MIN_CANARIES_FOR_ALERT",
+   "value": 20,
+   "unit": "canaries",
+   "comment": "ASSUMPTION: warm-up; no alert can fire until at least this many canaries have been seen in total"
+  },
+  {
+   "name": "ALERT_WINDOW_DAYS",
+   "value": 3,
+   "unit": "days",
+   "comment": "ASSUMPTION: trailing window for the alert estimate (the day and the days before it)"
+  },
+  {
+   "name": "ALERT_RULE",
+   "value": "pooled window > limit",
+   "unit": "",
+   "comment": "Alert on any day, after the warm-up, when the pooled corrected estimate is above ALERT_LIMIT: non-canary errors found / non-canary reviews over the trailing ALERT_WINDOW_DAYS days, divided by the cumulative sensitivity (canaries caught / seen to date), capped at 100%. Every alert day is recorded"
+  },
+  {
+   "name": "QUALITY_EVAL_RUNS",
+   "value": 500,
+   "unit": "runs",
+   "comment": "Monitor evaluation: the 14-day series is simulated this many times; per rule we report the share of runs with an alert before drift starts, the median days from drift start to the first alert on or after it (alert on the drift start day = 0 days), and the share of runs with no alert on or after drift start within the window"
   },
   {
    "name": "BANNER_MULT",

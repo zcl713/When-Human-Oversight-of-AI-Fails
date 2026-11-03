@@ -16,7 +16,8 @@
    "corrected": 0.1481,
    "corrected_lo": 0.064,
    "corrected_hi": 0.5385,
-   "true_rate": 0.065
+   "true_rate": 0.065,
+   "pooled": null
   },
   {
    "day": 2,
@@ -34,7 +35,8 @@
    "corrected": 0.0889,
    "corrected_lo": 0.0242,
    "corrected_hi": 0.3647,
-   "true_rate": 0.065
+   "true_rate": 0.065,
+   "pooled": null
   },
   {
    "day": 3,
@@ -52,7 +54,8 @@
    "corrected": 0.0476,
    "corrected_lo": 0.012,
    "corrected_hi": 0.29,
-   "true_rate": 0.065
+   "true_rate": 0.065,
+   "pooled": null
   },
   {
    "day": 4,
@@ -70,7 +73,8 @@
    "corrected": 0.0556,
    "corrected_lo": 0.012,
    "corrected_hi": 0.3333,
-   "true_rate": 0.065
+   "true_rate": 0.065,
+   "pooled": null
   },
   {
    "day": 5,
@@ -88,7 +92,15 @@
    "corrected": 0.0556,
    "corrected_lo": 0.0122,
    "corrected_hi": 0.3278,
-   "true_rate": 0.065
+   "true_rate": 0.065,
+   "pooled": {
+    "first_day": 3,
+    "found": 3,
+    "reviewed": 108,
+    "corrected": 0.0556,
+    "lo": 0.0201,
+    "hi": 0.1835
+   }
   },
   {
    "day": 6,
@@ -106,7 +118,15 @@
    "corrected": 0.0556,
    "corrected_lo": 0.0128,
    "corrected_hi": 0.305,
-   "true_rate": 0.065
+   "true_rate": 0.065,
+   "pooled": {
+    "first_day": 4,
+    "found": 3,
+    "reviewed": 108,
+    "corrected": 0.0556,
+    "lo": 0.0205,
+    "hi": 0.168
+   }
   },
   {
    "day": 7,
@@ -124,7 +144,15 @@
    "corrected": 0.0,
    "corrected_lo": 0.0,
    "corrected_hi": 0.2155,
-   "true_rate": 0.065
+   "true_rate": 0.065,
+   "pooled": {
+    "first_day": 5,
+    "found": 2,
+    "reviewed": 108,
+    "corrected": 0.037,
+    "lo": 0.0114,
+    "hi": 0.1418
+   }
   },
   {
    "day": 8,
@@ -142,7 +170,15 @@
    "corrected": 0.0,
    "corrected_lo": 0.0,
    "corrected_hi": 0.1887,
-   "true_rate": 0.065
+   "true_rate": 0.065,
+   "pooled": {
+    "first_day": 6,
+    "found": 1,
+    "reviewed": 108,
+    "corrected": 0.0174,
+    "lo": 0.004,
+    "hi": 0.1048
+   }
   },
   {
    "day": 9,
@@ -160,7 +196,15 @@
    "corrected": 0.1111,
    "corrected_lo": 0.0331,
    "corrected_hi": 0.392,
-   "true_rate": 0.085
+   "true_rate": 0.085,
+   "pooled": {
+    "first_day": 7,
+    "found": 2,
+    "reviewed": 108,
+    "corrected": 0.037,
+    "lo": 0.0113,
+    "hi": 0.1439
+   }
   },
   {
    "day": 10,
@@ -178,7 +222,15 @@
    "corrected": 0.0529,
    "corrected_lo": 0.0133,
    "corrected_hi": 0.2708,
-   "true_rate": 0.105
+   "true_rate": 0.105,
+   "pooled": {
+    "first_day": 8,
+    "found": 3,
+    "reviewed": 108,
+    "corrected": 0.0529,
+    "lo": 0.0185,
+    "hi": 0.1552
+   }
   },
   {
    "day": 11,
@@ -196,7 +248,15 @@
    "corrected": 0.0489,
    "corrected_lo": 0.0116,
    "corrected_hi": 0.2654,
-   "true_rate": 0.125
+   "true_rate": 0.125,
+   "pooled": {
+    "first_day": 9,
+    "found": 4,
+    "reviewed": 108,
+    "corrected": 0.0652,
+    "lo": 0.0276,
+    "hi": 0.1694
+   }
   },
   {
    "day": 12,
@@ -214,7 +274,15 @@
    "corrected": 0.1975,
    "corrected_lo": 0.0833,
    "corrected_hi": 0.4877,
-   "true_rate": 0.145
+   "true_rate": 0.145,
+   "pooled": {
+    "first_day": 10,
+    "found": 6,
+    "reviewed": 108,
+    "corrected": 0.0988,
+    "lo": 0.0463,
+    "hi": 0.224
+   }
   },
   {
    "day": 13,
@@ -232,7 +300,15 @@
    "corrected": 0.0466,
    "corrected_lo": 0.0111,
    "corrected_hi": 0.2446,
-   "true_rate": 0.165
+   "true_rate": 0.165,
+   "pooled": {
+    "first_day": 11,
+    "found": 6,
+    "reviewed": 108,
+    "corrected": 0.0932,
+    "lo": 0.0403,
+    "hi": 0.2056
+   }
   },
   {
    "day": 14,
@@ -250,7 +326,15 @@
    "corrected": 0.183,
    "corrected_lo": 0.071,
    "corrected_hi": 0.4409,
-   "true_rate": 0.185
+   "true_rate": 0.185,
+   "pooled": {
+    "first_day": 12,
+    "found": 9,
+    "reviewed": 108,
+    "corrected": 0.1373,
+    "lo": 0.0735,
+    "hi": 0.2538
+   }
   }
  ],
  "slice": 40,
@@ -258,12 +342,41 @@
  "real_per_day": 36,
  "correction_draws": 2000,
  "alert_limit": 0.08,
- "alert_days": 2,
  "drift_start_day": 9,
- "alert_day": 2,
+ "illustrative": true,
  "alerts": [
-  2
+  12,
+  13,
+  14
  ],
- "drift_alert_day": null,
- "illustrative": true
+ "alert_day": 12,
+ "drift_alert_day": 12,
+ "warmup_day": 5,
+ "min_canaries_for_alert": 20,
+ "window_days": 3,
+ "old_rule": {
+  "alert_days": 2,
+  "alerts": [
+   2
+  ],
+  "alert_day": 2,
+  "drift_alert_day": null
+ },
+ "evaluation": {
+  "runs": 500,
+  "new": {
+   "runs": 500,
+   "false_alarm_runs": 291,
+   "alerted_runs": 496,
+   "median_delay_days": 1.0,
+   "missed_runs": 4
+  },
+  "old": {
+   "runs": 500,
+   "false_alarm_runs": 282,
+   "alerted_runs": 476,
+   "median_delay_days": 2.0,
+   "missed_runs": 24
+  }
+ }
 }
