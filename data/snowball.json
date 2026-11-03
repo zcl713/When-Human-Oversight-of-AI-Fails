@@ -2,7 +2,7 @@
  "budget_pct": 10,
  "catch_rate": 0.62,
  "step_min": 15,
- "risk_select_share": 0.8293,
+ "risk_select_share": 0.8438,
  "catch_prob": 0.341,
  "outcome": [
   {
@@ -12,12 +12,12 @@
    "reviewed": [
     27,
     18,
-    36
+    37
    ],
    "caught": [
     9,
     4,
-    15
+    16
    ],
    "blocked": [
     0,
@@ -26,10 +26,10 @@
    ],
    "clients_reached": [
     259,
-    253,
+    252,
     264
    ],
-   "detection_min": 36,
+   "detection_min": 38,
    "detection_kind": "first catch (one-off fix)",
    "detected_share_of_runs": 1.0,
    "root_cause_found": false
@@ -58,7 +58,7 @@
     8,
     23
    ],
-   "detection_min": 36,
+   "detection_min": 35,
    "detection_kind": "root cause identified",
    "detected_share_of_runs": 1.0,
    "root_cause_found": true
@@ -81,7 +81,7 @@
   },
   {
    "t": 15,
-   "affected": 8,
+   "affected": 9,
    "random": [
     8,
     3,
@@ -90,29 +90,29 @@
    "risk": [
     6,
     2,
-    11
+    12
    ]
   },
   {
    "t": 30,
    "affected": 17,
    "random": [
-    16,
-    8,
-    25
+    17,
+    9,
+    24
    ],
    "risk": [
     12,
     6,
-    20
+    19
    ]
   },
   {
    "t": 45,
-   "affected": 25,
+   "affected": 26,
    "random": [
-    24,
-    15,
+    25,
+    16,
     35
    ],
    "risk": [
@@ -125,9 +125,9 @@
    "t": 60,
    "affected": 34,
    "random": [
-    32,
-    21,
-    44
+    33,
+    23,
+    45
    ],
    "risk": [
     15,
@@ -140,8 +140,8 @@
    "affected": 42,
    "random": [
     41,
-    30,
-    52
+    31,
+    54
    ],
    "risk": [
     15,
@@ -151,11 +151,11 @@
   },
   {
    "t": 90,
-   "affected": 50,
+   "affected": 51,
    "random": [
     49,
     37,
-    61
+    62
    ],
    "risk": [
     15,
@@ -179,10 +179,10 @@
   },
   {
    "t": 120,
-   "affected": 67,
+   "affected": 68,
    "random": [
     65,
-    52,
+    53,
     79
    ],
    "risk": [
@@ -210,8 +210,8 @@
    "affected": 84,
    "random": [
     81,
-    67,
-    97
+    68,
+    95
    ],
    "risk": [
     15,
@@ -221,9 +221,9 @@
   },
   {
    "t": 165,
-   "affected": 92,
+   "affected": 93,
    "random": [
-    89,
+    90,
     76,
     104
    ],
@@ -237,9 +237,9 @@
    "t": 180,
    "affected": 101,
    "random": [
-    97,
-    83,
-    112
+    98,
+    84,
+    113
    ],
    "risk": [
     15,
@@ -249,11 +249,11 @@
   },
   {
    "t": 195,
-   "affected": 109,
+   "affected": 110,
    "random": [
-    105,
-    91,
-    121
+    106,
+    92,
+    122
    ],
    "risk": [
     15,
@@ -263,11 +263,11 @@
   },
   {
    "t": 210,
-   "affected": 117,
+   "affected": 118,
    "random": [
-    113,
-    98,
-    129
+    114,
+    99,
+    130
    ],
    "risk": [
     15,
@@ -279,9 +279,9 @@
    "t": 225,
    "affected": 126,
    "random": [
-    121,
+    122,
     107,
-    137
+    139
    ],
    "risk": [
     15,
@@ -291,11 +291,11 @@
   },
   {
    "t": 240,
-   "affected": 134,
+   "affected": 135,
    "random": [
     130,
-    113,
-    146
+    114,
+    147
    ],
    "risk": [
     15,
@@ -309,7 +309,7 @@
    "random": [
     138,
     122,
-    154
+    155
    ],
    "risk": [
     15,
@@ -322,8 +322,8 @@
    "affected": 151,
    "random": [
     146,
-    129,
-    164
+    130,
+    162
    ],
    "risk": [
     15,
@@ -333,11 +333,11 @@
   },
   {
    "t": 285,
-   "affected": 159,
+   "affected": 160,
    "random": [
     154,
-    137,
-    171
+    138,
+    172
    ],
    "risk": [
     15,
@@ -347,11 +347,11 @@
   },
   {
    "t": 300,
-   "affected": 167,
+   "affected": 168,
    "random": [
     162,
-    146,
-    179
+    147,
+    178
    ],
    "risk": [
     15,
@@ -364,7 +364,7 @@
    "affected": 176,
    "random": [
     170,
-    154,
+    155,
     186
    ],
    "risk": [
@@ -375,11 +375,11 @@
   },
   {
    "t": 330,
-   "affected": 184,
+   "affected": 185,
    "random": [
-    178,
+    179,
     163,
-    193
+    194
    ],
    "risk": [
     15,
@@ -391,9 +391,9 @@
    "t": 345,
    "affected": 193,
    "random": [
-    186,
+    187,
     172,
-    201
+    202
    ],
    "risk": [
     15,
@@ -405,9 +405,9 @@
    "t": 360,
    "affected": 201,
    "random": [
-    194,
-    180,
-    208
+    195,
+    179,
+    209
    ],
    "risk": [
     15,
@@ -420,7 +420,7 @@
    "affected": 210,
    "random": [
     202,
-    189,
+    188,
     216
    ],
    "risk": [
@@ -434,7 +434,7 @@
    "affected": 218,
    "random": [
     210,
-    196,
+    197,
     223
    ],
    "risk": [
@@ -447,8 +447,8 @@
    "t": 405,
    "affected": 226,
    "random": [
-    218,
-    206,
+    219,
+    205,
     231
    ],
    "risk": [
@@ -462,8 +462,8 @@
    "affected": 235,
    "random": [
     227,
-    214,
-    239
+    215,
+    238
    ],
    "risk": [
     15,
@@ -477,7 +477,7 @@
    "random": [
     235,
     224,
-    245
+    244
    ],
    "risk": [
     15,
@@ -490,7 +490,7 @@
    "affected": 251,
    "random": [
     243,
-    234,
+    233,
     252
    ],
    "risk": [
@@ -501,11 +501,11 @@
   },
   {
    "t": 465,
-   "affected": 259,
+   "affected": 260,
    "random": [
     251,
     242,
-    259
+    258
    ],
    "risk": [
     15,
@@ -518,7 +518,7 @@
    "affected": 268,
    "random": [
     259,
-    253,
+    252,
     264
    ],
    "risk": [

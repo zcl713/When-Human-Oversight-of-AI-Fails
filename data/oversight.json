@@ -5,7 +5,7 @@
   "label": "Baseline: answer text only",
   "reviewers": 12,
   "shown": 60,
-  "caught": 40,
+  "caught": 39,
   "model_p": 0.62,
   "illustrative": true
  },
@@ -15,7 +15,7 @@
   "label": "Coverage and freshness banner",
   "reviewers": 12,
   "shown": 60,
-  "caught": 46,
+  "caught": 41,
   "model_p": 0.775,
   "illustrative": true
  },
@@ -25,7 +25,7 @@
   "label": "After 50 clean items",
   "reviewers": 12,
   "shown": 60,
-  "caught": 30,
+  "caught": 26,
   "model_p": 0.403,
   "illustrative": true
  },
@@ -35,7 +35,7 @@
   "label": "30 items queued",
   "reviewers": 12,
   "shown": 60,
-  "caught": 24,
+  "caught": 34,
   "model_p": 0.465,
   "illustrative": true
  },
@@ -45,7 +45,7 @@
   "label": "Wrong number looks plausible",
   "reviewers": 12,
   "shown": 60,
-  "caught": 13,
+  "caught": 24,
   "model_p": 0.341,
   "illustrative": true
  },
@@ -55,7 +55,7 @@
   "label": "Alert fatigue (alerts on 40% of items)",
   "reviewers": 12,
   "shown": 60,
-  "caught": 21,
+  "caught": 19,
   "model_p": 0.372,
   "illustrative": true
  }

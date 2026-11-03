@@ -67,88 +67,145 @@
  "period_days": 5,
  "outputs_per_day": 400,
  "min_per_review": 4.5,
- "reviews_needed_50": [
+ "at_capacity": [
   {
    "method": "Random sampling",
    "catch_rate": 0.4,
-   "budget_pct": null,
-   "reviews_per_day": null,
-   "reachable": false,
-   "best_share": 0.31
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 2
   },
   {
    "method": "Random sampling",
    "catch_rate": 0.5,
-   "budget_pct": null,
-   "reviews_per_day": null,
-   "reachable": false,
-   "best_share": 0.3863
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 2
   },
   {
    "method": "Random sampling",
    "catch_rate": 0.62,
-   "budget_pct": null,
-   "reviews_per_day": null,
-   "reachable": false,
-   "best_share": 0.4779
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 3
   },
   {
    "method": "Random sampling",
    "catch_rate": 0.75,
-   "budget_pct": 88,
-   "reviews_per_day": 352,
-   "reachable": true,
-   "best_share": 0.5741
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 3
   },
   {
    "method": "Random sampling",
    "catch_rate": 0.9,
-   "budget_pct": 73,
-   "reviews_per_day": 292,
-   "reachable": true,
-   "best_share": 0.6893
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 4
   },
   {
    "method": "Risk-based",
    "catch_rate": 0.4,
-   "budget_pct": null,
-   "reviews_per_day": null,
-   "reachable": false,
-   "best_share": 0.3125
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 9
   },
   {
    "method": "Risk-based",
    "catch_rate": 0.5,
-   "budget_pct": null,
-   "reviews_per_day": null,
-   "reachable": false,
-   "best_share": 0.3908
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 11
   },
   {
    "method": "Risk-based",
    "catch_rate": 0.62,
-   "budget_pct": null,
-   "reviews_per_day": null,
-   "reachable": false,
-   "best_share": 0.4809
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 14
   },
   {
    "method": "Risk-based",
    "catch_rate": 0.75,
-   "budget_pct": 29,
-   "reviews_per_day": 116,
-   "reachable": true,
-   "best_share": 0.582
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 17
   },
   {
    "method": "Risk-based",
    "catch_rate": 0.9,
-   "budget_pct": 16,
-   "reviews_per_day": 64,
-   "reachable": true,
-   "best_share": 0.6975
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 20
   }
  ],
+ "ceiling": [
+  {
+   "catch_rate": 0.4,
+   "injected": 45,
+   "caught": 14,
+   "method": "Risk-based",
+   "budget_pct": 86.0,
+   "reviews_per_day": 344
+  },
+  {
+   "catch_rate": 0.5,
+   "injected": 45,
+   "caught": 17,
+   "method": "Risk-based",
+   "budget_pct": 90.0,
+   "reviews_per_day": 360
+  },
+  {
+   "catch_rate": 0.62,
+   "injected": 45,
+   "caught": 22,
+   "method": "Risk-based",
+   "budget_pct": 84.0,
+   "reviews_per_day": 336
+  },
+  {
+   "catch_rate": 0.75,
+   "injected": 45,
+   "caught": 26,
+   "method": "Risk-based",
+   "budget_pct": 79.0,
+   "reviews_per_day": 316
+  },
+  {
+   "catch_rate": 0.9,
+   "injected": 45,
+   "caught": 32,
+   "method": "Risk-based",
+   "budget_pct": 85.0,
+   "reviews_per_day": 340
+  }
+ ],
+ "lopa_modes": {
+  "Calculation": [
+   "C1",
+   "C2",
+   "C6"
+  ],
+  "Intent": [
+   "I1",
+   "I2"
+  ],
+  "Wrong tool": [
+   "T1"
+  ]
+ },
+ "min_injected_per_mode": 15,
  "assumptions": [
   {
    "name": "N_OUTPUTS",
@@ -357,6 +414,46 @@
    "value": 12,
    "unit": "reviewers",
    "comment": "ASSUMPTION: reviewers in the reviewer experiment"
+  },
+  {
+   "name": "T1",
+   "value": "S4 L3 D4 (RPN 48)",
+   "unit": "scores",
+   "comment": "ASSUMPTION: team-added failure mode 'Wrong tool selected' (Planning), not in the workbook; team-added, pending Lopa's review"
+  },
+  {
+   "name": "LOPA_MODES",
+   "value": {
+    "Calculation": "C1 C2 C6",
+    "Intent": "I1 I2",
+    "Wrong tool": "T1"
+   },
+   "unit": "test IDs",
+   "comment": "Lopa's three priority failure modes"
+  },
+  {
+   "name": "MIN_INJECTED_PER_MODE",
+   "value": 15,
+   "unit": "errors per run",
+   "comment": "ASSUMPTION (strategy simulation only): each of Lopa's modes is oversampled to at least this many injected errors per run, by reassigning errors from the most common other failure types so the total stays the same. The quality series is not oversampled"
+  },
+  {
+   "name": "CANARY_PER_DAY",
+   "value": 4,
+   "unit": "seeded errors a day",
+   "comment": "ASSUMPTION: known errors seeded into each day's random review slice, drawn from the natural error mix and reviewed like any other answer. More than the suite's 1 in 50 so the reviewer catch rate can be estimated, at the cost of fewer real answers reviewed"
+  },
+  {
+   "name": "CORRECTION_METHOD",
+   "value": "raw rate / sensitivity",
+   "unit": "",
+   "comment": "Corrected error rate = errors found in the non-canary reviews / non-canary reviews, divided by reviewer sensitivity (canaries caught / canaries seen to date), capped at 100%. 95% interval: 2.5th-97.5th percentile of CORRECTION_DRAWS draws of Beta(found+1, misses+1) / Beta(canaries caught+1, canaries missed+1)"
+  },
+  {
+   "name": "CORRECTION_DRAWS",
+   "value": 2000,
+   "unit": "draws",
+   "comment": "Monte Carlo draws for the corrected-estimate interval"
   }
  ]
 }
