@@ -1,0 +1,495 @@
+{
+ "seed": 83,
+ "n_runs": 500,
+ "high_impact_rpn": 60,
+ "high_impact_types": [
+  "D1",
+  "D2",
+  "C1",
+  "C2",
+  "C6",
+  "I1",
+  "I2",
+  "O1"
+ ],
+ "error_types": [
+  "Reasoning",
+  "Planning",
+  "System execution"
+ ],
+ "control_layer": "Control layer (human review)",
+ "methods": [
+  "Random sampling",
+  "Risk-based"
+ ],
+ "budgets": [
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23,
+  24,
+  25,
+  26,
+  27,
+  28,
+  29,
+  30
+ ],
+ "catch_rates": [
+  0.4,
+  0.5,
+  0.62,
+  0.75,
+  0.9
+ ],
+ "default_budget": 10,
+ "default_catch_rate": 0.62,
+ "team_capacity": 50,
+ "outputs": 2000,
+ "period_days": 5,
+ "outputs_per_day": 400,
+ "min_per_review": 4.5,
+ "at_capacity": [
+  {
+   "method": "Random sampling",
+   "catch_rate": 0.4,
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 2
+  },
+  {
+   "method": "Random sampling",
+   "catch_rate": 0.5,
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 2
+  },
+  {
+   "method": "Random sampling",
+   "catch_rate": 0.62,
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 3
+  },
+  {
+   "method": "Random sampling",
+   "catch_rate": 0.75,
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 3
+  },
+  {
+   "method": "Random sampling",
+   "catch_rate": 0.9,
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 4
+  },
+  {
+   "method": "Risk-based",
+   "catch_rate": 0.4,
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 9
+  },
+  {
+   "method": "Risk-based",
+   "catch_rate": 0.5,
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 11
+  },
+  {
+   "method": "Risk-based",
+   "catch_rate": 0.62,
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 14
+  },
+  {
+   "method": "Risk-based",
+   "catch_rate": 0.75,
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 17
+  },
+  {
+   "method": "Risk-based",
+   "catch_rate": 0.9,
+   "budget_pct": 12.5,
+   "reviews_per_day": 50,
+   "injected": 45,
+   "caught": 20
+  }
+ ],
+ "ceiling": [
+  {
+   "catch_rate": 0.4,
+   "injected": 45,
+   "caught": 14,
+   "method": "Risk-based",
+   "budget_pct": 86.0,
+   "reviews_per_day": 344
+  },
+  {
+   "catch_rate": 0.5,
+   "injected": 45,
+   "caught": 17,
+   "method": "Risk-based",
+   "budget_pct": 90.0,
+   "reviews_per_day": 360
+  },
+  {
+   "catch_rate": 0.62,
+   "injected": 45,
+   "caught": 22,
+   "method": "Risk-based",
+   "budget_pct": 84.0,
+   "reviews_per_day": 336
+  },
+  {
+   "catch_rate": 0.75,
+   "injected": 45,
+   "caught": 26,
+   "method": "Risk-based",
+   "budget_pct": 79.0,
+   "reviews_per_day": 316
+  },
+  {
+   "catch_rate": 0.9,
+   "injected": 45,
+   "caught": 32,
+   "method": "Risk-based",
+   "budget_pct": 85.0,
+   "reviews_per_day": 340
+  }
+ ],
+ "lopa_modes": {
+  "Calculation": [
+   "C1",
+   "C2",
+   "C6"
+  ],
+  "Intent": [
+   "I1",
+   "I2"
+  ],
+  "Wrong tool": [
+   "T1"
+  ]
+ },
+ "min_injected_per_mode": 15,
+ "assumptions": [
+  {
+   "name": "N_OUTPUTS",
+   "value": 2000,
+   "unit": "agent answers",
+   "comment": "ASSUMPTION: answers produced in one simulated period"
+  },
+  {
+   "name": "PERIOD_DAYS",
+   "value": 5,
+   "unit": "business days",
+   "comment": "ASSUMPTION: length of the simulated period (400 answers a day)"
+  },
+  {
+   "name": "ERROR_RATE",
+   "value": 0.065,
+   "unit": "share",
+   "comment": "ASSUMPTION: share of answers that contain an injected error"
+  },
+  {
+   "name": "INJECTION_WEIGHT",
+   "value": "likelihood score",
+   "unit": "",
+   "comment": "ASSUMPTION: a failure type is injected in proportion to its likelihood score (1-5)"
+  },
+  {
+   "name": "BASE_CATCH",
+   "value": 0.62,
+   "unit": "probability",
+   "comment": "ASSUMPTION: chance a reviewer catches an error they look at, before modifiers"
+  },
+  {
+   "name": "FATIGUE_ONSET",
+   "value": 10,
+   "unit": "clean items",
+   "comment": "ASSUMPTION: fatigue starts after this many consecutive clean items"
+  },
+  {
+   "name": "FATIGUE_FULL",
+   "value": 50,
+   "unit": "clean items",
+   "comment": "ASSUMPTION: fatigue is at its maximum after this many consecutive clean items"
+  },
+  {
+   "name": "FATIGUE_MAX_DROP",
+   "value": 0.35,
+   "unit": "share",
+   "comment": "ASSUMPTION: at full fatigue the catch chance falls by 35%"
+  },
+  {
+   "name": "TEAM_CAPACITY",
+   "value": 50,
+   "unit": "reviews a day",
+   "comment": "ASSUMPTION: reviews the team can do in a day without loss of quality"
+  },
+  {
+   "name": "LOAD_DROP",
+   "value": 0.25,
+   "unit": "share per capacity",
+   "comment": "ASSUMPTION: each extra team-capacity of daily reviews cuts the catch chance by 25%"
+  },
+  {
+   "name": "LOAD_FLOOR",
+   "value": 0.5,
+   "unit": "share",
+   "comment": "ASSUMPTION: load never cuts the catch chance below half"
+  },
+  {
+   "name": "PLAUSIBLE_MULT",
+   "value": 0.55,
+   "unit": "multiplier",
+   "comment": "ASSUMPTION: catch chance is multiplied by 0.55 when the wrong output looks plausible"
+  },
+  {
+   "name": "PLAUSIBLE_BY_DETECTABILITY",
+   "value": {
+    "1": 0.0,
+    "2": 0.0,
+    "3": 0.1,
+    "4": 0.3,
+    "5": 0.6
+   },
+   "unit": "probability",
+   "comment": "ASSUMPTION: chance an error looks plausible, by the failure type's detectability score"
+  },
+  {
+   "name": "GUARDRAIL_STRENGTH",
+   "value": 1.0,
+   "unit": "multiplier",
+   "comment": "ASSUMPTION: scales how much the guardrail risk score separates errors from clean answers"
+  },
+  {
+   "name": "GUARDRAIL_SIGNAL",
+   "value": {
+    "System execution": 1.9,
+    "Reasoning": 1.2,
+    "Planning": 0.7
+   },
+   "unit": "score shift",
+   "comment": "ASSUMPTION: mean risk-score shift for an error, by error type (clean answers score N(0,1)); planning errors look normal to most guardrails"
+  },
+  {
+   "name": "GUARDRAIL_SEVERITY_SLOPE",
+   "value": 0.15,
+   "unit": "score per severity point",
+   "comment": "ASSUMPTION: extra risk-score shift per severity point"
+  },
+  {
+   "name": "MIN_PER_REVIEW",
+   "value": 4.5,
+   "unit": "minutes",
+   "comment": "ASSUMPTION: reviewer time per answer"
+  },
+  {
+   "name": "DEFAULT_BUDGET",
+   "value": 10,
+   "unit": "% of answers",
+   "comment": "ASSUMPTION: current review budget"
+  },
+  {
+   "name": "SNOWBALL_HOUSEHOLDS",
+   "value": 412,
+   "unit": "households",
+   "comment": "ASSUMPTION: households holding the fund with the stale price"
+  },
+  {
+   "name": "SNOWBALL_ANSWERS",
+   "value": 268,
+   "unit": "answers",
+   "comment": "ASSUMPTION: agent answers that use the stale price during the day"
+  },
+  {
+   "name": "SNOWBALL_DAY_MIN",
+   "value": 480,
+   "unit": "minutes",
+   "comment": "ASSUMPTION: the trading day; answers arrive evenly at random through it, the stale feed starts at minute 0"
+  },
+  {
+   "name": "ROOT_CAUSE_CLUSTER",
+   "value": 3,
+   "unit": "flagged answers",
+   "comment": "ASSUMPTION: risk-based review links the catches to the feed once this many answers with a freshness flag on the same fund have been reviewed"
+  },
+  {
+   "name": "INVESTIGATION_MIN",
+   "value": 30,
+   "unit": "minutes",
+   "comment": "ASSUMPTION: time from the cluster to blocking further answers that use the feed"
+  },
+  {
+   "name": "QUALITY_DAYS",
+   "value": 14,
+   "unit": "days",
+   "comment": "ASSUMPTION: length of the quality-monitoring window"
+  },
+  {
+   "name": "QUALITY_SLICE",
+   "value": 40,
+   "unit": "answers a day",
+   "comment": "ASSUMPTION: size of the daily random review slice used to estimate quality"
+  },
+  {
+   "name": "DRIFT_START_DAY",
+   "value": 9,
+   "unit": "day",
+   "comment": "ASSUMPTION: the true error rate starts to rise on this day"
+  },
+  {
+   "name": "DRIFT_PER_DAY",
+   "value": 0.02,
+   "unit": "share a day",
+   "comment": "ASSUMPTION: rise in the true error rate per day after drift starts"
+  },
+  {
+   "name": "ALERT_LIMIT",
+   "value": 0.08,
+   "unit": "share",
+   "comment": "Fixed alert limit used by the previous rules, kept for comparison. It sits too close to the 6.5% baseline: the pooled rule at this limit false-alarmed before drift in about 58% of simulated runs, so the alert rule now uses a calibrated limit"
+  },
+  {
+   "name": "ALERT_FALSE_ALARM_BUDGET",
+   "value": 0.05,
+   "unit": "share of runs",
+   "comment": "ASSUMPTION: at most this share of 14-day runs with no drift may raise any alert"
+  },
+  {
+   "name": "ALERT_CALIBRATION",
+   "value": "smallest T within budget",
+   "unit": "",
+   "comment": "The calibrated limit T is the smallest limit (to 0.01 percentage points, rounded up) at which at most ALERT_FALSE_ALARM_BUDGET of QUALITY_EVAL_RUNS simulated no-drift runs (true rate at baseline all 14 days) have any alert day after the warm-up. T is evaluated on separate fresh runs with drift, and checked on a second fresh no-drift set; the drift runs are never used to choose T"
+  },
+  {
+   "name": "ALERT_DAYS",
+   "value": 2,
+   "unit": "days",
+   "comment": "OLD RULE, kept for comparison only: alert when the daily corrected estimate is above the limit this many days in a row"
+  },
+  {
+   "name": "MIN_CANARIES_FOR_ALERT",
+   "value": 20,
+   "unit": "canaries",
+   "comment": "ASSUMPTION: warm-up; no alert can fire until at least this many canaries have been seen in total"
+  },
+  {
+   "name": "ALERT_WINDOW_DAYS",
+   "value": 3,
+   "unit": "days",
+   "comment": "ASSUMPTION: trailing window for the alert estimate (the day and the days before it)"
+  },
+  {
+   "name": "ALERT_RULE",
+   "value": "pooled window > limit",
+   "unit": "",
+   "comment": "Alert on any day, after the warm-up, when the pooled corrected estimate is above ALERT_LIMIT: non-canary errors found / non-canary reviews over the trailing ALERT_WINDOW_DAYS days, divided by the cumulative sensitivity (canaries caught / seen to date), capped at 100%, above the calibrated limit T. Every alert day is recorded"
+  },
+  {
+   "name": "QUALITY_EVAL_RUNS",
+   "value": 500,
+   "unit": "runs",
+   "comment": "Monitor evaluation: the 14-day series is simulated this many times; per rule we report the share of runs with an alert before drift starts, the median days from drift start to the first alert on or after it (alert on the drift start day = 0 days), and the share of runs with no alert on or after drift start within the window"
+  },
+  {
+   "name": "BANNER_MULT",
+   "value": 1.25,
+   "unit": "multiplier",
+   "comment": "ASSUMPTION (reviewer experiment only): a coverage and freshness banner raises the catch chance by 25%"
+  },
+  {
+   "name": "ALERT_FATIGUE_MULT",
+   "value": 0.6,
+   "unit": "multiplier",
+   "comment": "ASSUMPTION (reviewer experiment only): alerts on 40% of items cut the catch chance by 40%"
+  },
+  {
+   "name": "EXPERIMENT_ITEMS",
+   "value": 60,
+   "unit": "items per condition",
+   "comment": "ASSUMPTION: planted errors shown per condition in the reviewer experiment"
+  },
+  {
+   "name": "EXPERIMENT_REVIEWERS",
+   "value": 12,
+   "unit": "reviewers",
+   "comment": "ASSUMPTION: reviewers in the reviewer experiment"
+  },
+  {
+   "name": "T1",
+   "value": "S4 L3 D4 (RPN 48)",
+   "unit": "scores",
+   "comment": "ASSUMPTION: team-added failure mode 'Wrong tool selected' (Planning), not in the workbook; team-added, pending Lopa's review"
+  },
+  {
+   "name": "LOPA_MODES",
+   "value": {
+    "Calculation": "C1 C2 C6",
+    "Intent": "I1 I2",
+    "Wrong tool": "T1"
+   },
+   "unit": "test IDs",
+   "comment": "Lopa's three priority failure modes"
+  },
+  {
+   "name": "MIN_INJECTED_PER_MODE",
+   "value": 15,
+   "unit": "errors per run",
+   "comment": "ASSUMPTION (strategy simulation only): each of Lopa's modes is oversampled to at least this many injected errors per run, by reassigning errors from the most common other failure types so the total stays the same. The quality series is not oversampled"
+  },
+  {
+   "name": "CANARY_PER_DAY",
+   "value": 4,
+   "unit": "seeded errors a day",
+   "comment": "ASSUMPTION: known errors seeded into each day's random review slice, drawn from the natural error mix and reviewed like any other answer. More than the suite's 1 in 50 so the reviewer catch rate can be estimated, at the cost of fewer real answers reviewed"
+  },
+  {
+   "name": "CORRECTION_METHOD",
+   "value": "raw rate / sensitivity",
+   "unit": "",
+   "comment": "Corrected error rate = errors found in the non-canary reviews / non-canary reviews, divided by reviewer sensitivity (canaries caught / canaries seen to date), capped at 100%. 95% interval: 2.5th-97.5th percentile of CORRECTION_DRAWS draws of Beta(found+1, misses+1) / Beta(canaries caught+1, canaries missed+1)"
+  },
+  {
+   "name": "CORRECTION_DRAWS",
+   "value": 2000,
+   "unit": "draws",
+   "comment": "Monte Carlo draws for the corrected-estimate interval"
+  }
+ ]
+}
