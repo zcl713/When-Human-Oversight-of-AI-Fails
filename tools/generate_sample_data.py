@@ -3,149 +3,816 @@
 Usage: python3 tools/generate_sample_data.py path/to/Sample_Test_Suite.xlsx data/
 
 Severity, likelihood and detectability come from the workbook's Test Cases sheet. Everything else
-(results, evidence, workflow areas, the inspection simulation, the snowball case and the oversight
-experiment) is synthesized and illustrative. The random seed is fixed, so the output is repeatable.
+(sample results, the inspection simulation, the snowball case, the quality series and the reviewer
+experiment) is synthesized and illustrative. Every modelling choice is a named constant in the
+ASSUMPTIONS block below. The random seed is fixed, so the output is repeatable.
+
+Model, per Monte Carlo run:
+  1. Injection: each agent output carries an error with probability ERROR_RATE. Each error is
+     assigned an agent failure type (a test ID from the suite) and takes that test's RPN and error
+     type (Reasoning / Planning / System execution). Human-review cases (H1-H8) are the control
+     layer: they are never injected and their RPNs are never used as risk priors.
+  2. Selection: a budget of k outputs is chosen, either at random or by the guardrail risk score.
+  3. Review: the selected outputs are reviewed in shuffled order (the reviewer never sees the risk
+     score, so the reviewer model and UI are identical for both strategies). Each error is caught
+     with probability BASE_CATCH x fatigue x load x plausibility.
+
+Team-added failure modes (TEAM_ADDED) join the workbook's test cases without editing the workbook.
+In the strategy simulation only, Lopa's priority failure modes (LOPA_MODES) are topped up to at least
+MIN_INJECTED_PER_MODE injected errors per run. The quality series uses the natural mix and seeds
+CANARY_PER_DAY known errors into each day's random review slice to estimate reviewer sensitivity.
+
 Needs: pip install openpyxl
 """
-import openpyxl, json, random, math, os, sys
-random.seed(83)
-OUT = sys.argv[2]; os.makedirs(OUT, exist_ok=True)
-wb = openpyxl.load_workbook(sys.argv[1])
-ws = wb['Test Cases']
 
-AREA = {}
-for k in 'D1 D2 D3 D4 D5 D6 D7 C5 S2 S4'.split(): AREA[k] = 'System execution'
-for k in 'C4 C6 I1 I2 I4 I5 I6 O5 S1'.split(): AREA[k] = 'Planning'
-for k in 'C1 C2 C3 C7 I3 O1 O2 O3 O4 O6 S3'.split(): AREA[k] = 'Reasoning'
-for k in 'H1 H2 H3 H4 H5 H6 H7 H8'.split(): AREA[k] = 'Human review'
-MVP = {'D1': 'Snowball root cause', 'C6': 'Calculation error', 'I1': 'Intent misread', 'C4': 'Wrong tool selected', 'D2': 'Coverage gap', 'H5': 'Plausibility anchoring'}
+from __future__ import annotations
 
-def tier(r):
-    return 'Critical' if r >= 60 else 'High' if r >= 36 else 'Medium' if r >= 18 else 'Low'
+import bisect
+import json
+import logging
+import math
+import random
+import sys
+from pathlib import Path
 
-rows = []
-for r in ws.iter_rows(min_row=5, values_only=True):
-    if not r[0]: continue
-    rid, layer, cat, test, setup, prompt, exp, passc, ctrl, s, l, d = r[:12]
-    reg = r[14]
-    rpn = s * l * d
-    # sample execution outcome, failure more likely at high RPN
-    u = random.random()
-    p_fail = min(0.85, rpn / 110)
-    if u < 0.12: status, result = 'Not started', 'Not run'
-    elif u < 0.12 + (1 - 0.12) * p_fail: status, result = 'Done', 'Fail'
-    elif u < 0.12 + (1 - 0.12) * (p_fail + (1 - p_fail) * 0.35): status, result = 'Done', 'Partial'
-    else: status, result = 'Done', 'Pass'
-    runs = 10
-    if result == 'Fail': k = random.randint(6, 10)
-    elif result == 'Partial': k = random.randint(2, 5)
-    elif result == 'Pass': k = 0
-    else: k = None
-    if k is None: ev = 'Not yet executed'
-    elif k == 0: ev = f'0 of {runs} runs failed; control behaved as specified'
-    else: ev = f'{k} of {runs} runs failed; trace T-{rid}-{random.randint(1,9):02d}'
-    rows.append(dict(id=rid, layer=layer, category=cat, test=test, area=AREA[rid],
-                     severity=s, likelihood=l, detectability=d, rpn=rpn, tier=tier(rpn),
-                     status=status, result=result, what=exp, evidence=ev, control=ctrl,
-                     exposure=reg, mvp=MVP.get(rid, ''), fail_runs=k))
-json.dump(rows, open(f'{OUT}/risks.json', 'w'), indent=0)
+import openpyxl
 
-# ---------- inspection strategy simulation ----------
-N = 2000
-areas = ['Reasoning', 'Planning', 'System execution']
-area_w = [0.35, 0.30, 0.35]
-# how much signal the guardrail risk score carries for each area
-signal = {'Reasoning': 1.2, 'Planning': 0.7, 'System execution': 1.9}
-pop = []
-for i in range(N):
-    err = random.random() < 0.065
-    if err:
-        a = random.choices(areas, area_w)[0]
-        sev = random.choices([1, 2, 3, 4, 5], [0.15, 0.25, 0.3, 0.2, 0.1])[0]
-        score = random.gauss(signal[a], 1.0) + 0.15 * sev
-    else:
-        a, sev = None, 0
-        score = random.gauss(0, 1.0)
-    pop.append(dict(err=err, area=a, sev=sev, score=score))
-errs = [p for p in pop if p['err']]
-E = len(errs); W = sum(p['sev'] for p in errs); C = sum(1 for p in errs if p['sev'] >= 4)
-catch_p = 0.62  # reviewer catch prob given inspected (baseline-ish)
-MIN_PER = 4.5
+log = logging.getLogger("generate_sample_data")
 
-ranked = sorted(pop, key=lambda p: -p['score'])
-curve = []
-for b in range(2, 32, 2):
-    k = round(N * b / 100)
-    # random: expectation
-    rec_r = b / 100 * catch_p
-    top = ranked[:k]
-    caught = [p for p in top if p['err']]
-    rec_k = len(caught) / E * catch_p
-    sw_k = sum(p['sev'] for p in caught) / W * catch_p
-    curve.append(dict(budget=b, method='Random sampling', recall=round(rec_r, 4), weighted_recall=round(rec_r, 4)))
-    curve.append(dict(budget=b, method='Risk-based', recall=round(rec_k, 4), weighted_recall=round(sw_k, 4)))
-json.dump(curve, open(f'{OUT}/strategy_curve.json', 'w'), indent=0)
+# ============================== ASSUMPTIONS ==============================
+# Every constant below is an illustrative assumption until the experiment has run. The Method tab
+# lists them (they are written to data/sim_meta.json together with these comments).
+SEED = 83
+N_RUNS = 500  # Monte Carlo runs; intervals are the middle 95% of runs
 
-B = 10; k = N * B // 100
-top = ranked[:k]
-summ = []
-for m in ['Random sampling', 'Risk-based']:
-    if m == 'Random sampling':
-        insp = E * B / 100; crit_insp = C * B / 100
-    else:
-        insp = sum(1 for p in top if p['err']); crit_insp = sum(1 for p in top if p['err'] and p['sev'] >= 4)
-    summ.append(dict(method=m, budget_pct=B, outputs=N, reviewed=k, errors_present=E,
-                     errors_inspected=round(insp, 1), errors_caught=round(insp * catch_p, 1),
-                     critical_present=C, critical_caught=round(crit_insp * catch_p, 1),
-                     review_hours=round(k * MIN_PER / 60, 1),
-                     errors_missed=round(E - insp * catch_p, 1)))
-json.dump(summ, open(f'{OUT}/strategy_summary.json', 'w'), indent=0)
+# Definition, not an assumption: an injected error is high-impact when its failure type has
+# RPN >= HIGH_IMPACT_RPN. 60 is the Critical tier. Change it here only, then regenerate.
+HIGH_IMPACT_RPN = 60
 
-by_area = []
-for a in areas:
-    ea = [p for p in errs if p['area'] == a]
-    for m in ['Random sampling', 'Risk-based']:
-        if m == 'Random sampling': c = len(ea) * B / 100 * catch_p
-        else: c = sum(1 for p in top if p['area'] == a) * catch_p
-        by_area.append(dict(area=a, method=m, errors=len(ea), caught=round(c, 1)))
-json.dump(by_area, open(f'{OUT}/strategy_by_area.json', 'w'), indent=0)
-
-# ---------- snowball dependency graph ----------
-nodes = [
-    dict(node='nav', label='Vendor NAV feed', stage=0, area='System execution', affected=1, unit='fund', state='root', note='Growth fund NAV not updated; prior close reused'),
-    dict(node='cache', label='Price cache', stage=1, area='System execution', affected=1, unit='stale price', state='propagating', note='Stale price served with no as-of timestamp'),
-    dict(node='hold', label='Holdings join', stage=2, area='System execution', affected=412, unit='households', state='propagating', note='412 households hold the fund'),
-    dict(node='perf', label='Daily performance report', stage=3, area='System execution', affected=412, unit='reports', state='propagating', note='Overnight report also built on the stale price'),
-    dict(node='calc', label='Impact calculator', stage=3, area='Reasoning', affected=268, unit='answers', state='propagating', note='Fund shown as flat; loss understated'),
-    dict(node='answer', label='Agent answer', stage=4, area='Reasoning', affected=268, unit='answers', state='propagating', note="'-1.6%, no action needed' reads as plausible"),
-    dict(node='review', label='Advisor review', stage=5, area='Human review', affected=268, unit='answers', state='control', note='Reviewer checks the number, not its base or freshness'),
-    dict(node='client', label='Sent to clients', stage=6, area='Human review', affected=241, unit='clients (random)', state='harm', note='Under random sampling, most reach clients'),
+ASSUMPTIONS = [
+    # (name, value, unit, comment)
+    ("N_OUTPUTS", 2000, "agent answers", "ASSUMPTION: answers produced in one simulated period"),
+    ("PERIOD_DAYS", 5, "business days", "ASSUMPTION: length of the simulated period (400 answers a day)"),
+    ("ERROR_RATE", 0.065, "share", "ASSUMPTION: share of answers that contain an injected error"),
+    ("INJECTION_WEIGHT", "likelihood score", "", "ASSUMPTION: a failure type is injected in proportion to its likelihood score (1-5)"),
+    ("BASE_CATCH", 0.62, "probability", "ASSUMPTION: chance a reviewer catches an error they look at, before modifiers"),
+    ("FATIGUE_ONSET", 10, "clean items", "ASSUMPTION: fatigue starts after this many consecutive clean items"),
+    ("FATIGUE_FULL", 50, "clean items", "ASSUMPTION: fatigue is at its maximum after this many consecutive clean items"),
+    ("FATIGUE_MAX_DROP", 0.35, "share", "ASSUMPTION: at full fatigue the catch chance falls by 35%"),
+    ("TEAM_CAPACITY", 50, "reviews a day", "ASSUMPTION: reviews the team can do in a day without loss of quality"),
+    ("LOAD_DROP", 0.25, "share per capacity", "ASSUMPTION: each extra team-capacity of daily reviews cuts the catch chance by 25%"),
+    ("LOAD_FLOOR", 0.5, "share", "ASSUMPTION: load never cuts the catch chance below half"),
+    ("PLAUSIBLE_MULT", 0.55, "multiplier", "ASSUMPTION: catch chance is multiplied by 0.55 when the wrong output looks plausible"),
+    ("PLAUSIBLE_BY_DETECTABILITY", {1: 0.0, 2: 0.0, 3: 0.1, 4: 0.3, 5: 0.6}, "probability", "ASSUMPTION: chance an error looks plausible, by the failure type's detectability score"),
+    ("GUARDRAIL_STRENGTH", 1.0, "multiplier", "ASSUMPTION: scales how much the guardrail risk score separates errors from clean answers"),
+    ("GUARDRAIL_SIGNAL", {"System execution": 1.9, "Reasoning": 1.2, "Planning": 0.7}, "score shift", "ASSUMPTION: mean risk-score shift for an error, by error type (clean answers score N(0,1)); planning errors look normal to most guardrails"),
+    ("GUARDRAIL_SEVERITY_SLOPE", 0.15, "score per severity point", "ASSUMPTION: extra risk-score shift per severity point"),
+    ("MIN_PER_REVIEW", 4.5, "minutes", "ASSUMPTION: reviewer time per answer"),
+    ("DEFAULT_BUDGET", 10, "% of answers", "ASSUMPTION: current review budget"),
+    ("SNOWBALL_HOUSEHOLDS", 412, "households", "ASSUMPTION: households holding the fund with the stale price"),
+    ("SNOWBALL_ANSWERS", 268, "answers", "ASSUMPTION: agent answers that use the stale price during the day"),
+    ("SNOWBALL_DAY_MIN", 480, "minutes", "ASSUMPTION: the trading day; answers arrive evenly at random through it, the stale feed starts at minute 0"),
+    ("ROOT_CAUSE_CLUSTER", 3, "flagged answers", "ASSUMPTION: risk-based review links the catches to the feed once this many answers with a freshness flag on the same fund have been reviewed"),
+    ("INVESTIGATION_MIN", 30, "minutes", "ASSUMPTION: time from the cluster to blocking further answers that use the feed"),
+    ("QUALITY_DAYS", 14, "days", "ASSUMPTION: length of the quality-monitoring window"),
+    ("QUALITY_SLICE", 40, "answers a day", "ASSUMPTION: size of the daily random review slice used to estimate quality"),
+    ("DRIFT_START_DAY", 9, "day", "ASSUMPTION: the true error rate starts to rise on this day"),
+    ("DRIFT_PER_DAY", 0.02, "share a day", "ASSUMPTION: rise in the true error rate per day after drift starts"),
+    ("ALERT_LIMIT", 0.08, "share", "Fixed alert limit used by the previous rules, kept for comparison. It sits too close to the 6.5% baseline: the pooled rule at this limit false-alarmed before drift in about 58% of simulated runs, so the alert rule now uses a calibrated limit"),
+    ("ALERT_FALSE_ALARM_BUDGET", 0.05, "share of runs", "ASSUMPTION: at most this share of 14-day runs with no drift may raise any alert"),
+    ("ALERT_CALIBRATION", "smallest T within budget", "", "The calibrated limit T is the smallest limit (to 0.01 percentage points, rounded up) at which at most ALERT_FALSE_ALARM_BUDGET of QUALITY_EVAL_RUNS simulated no-drift runs (true rate at baseline all 14 days) have any alert day after the warm-up. T is evaluated on separate fresh runs with drift, and checked on a second fresh no-drift set; the drift runs are never used to choose T"),
+    ("ALERT_DAYS", 2, "days", "OLD RULE, kept for comparison only: alert when the daily corrected estimate is above the limit this many days in a row"),
+    ("MIN_CANARIES_FOR_ALERT", 20, "canaries", "ASSUMPTION: warm-up; no alert can fire until at least this many canaries have been seen in total"),
+    ("ALERT_WINDOW_DAYS", 3, "days", "ASSUMPTION: trailing window for the alert estimate (the day and the days before it)"),
+    ("ALERT_RULE", "pooled window > limit", "", "Alert on any day, after the warm-up, when the pooled corrected estimate is above ALERT_LIMIT: non-canary errors found / non-canary reviews over the trailing ALERT_WINDOW_DAYS days, divided by the cumulative sensitivity (canaries caught / seen to date), capped at 100%, above the calibrated limit T. Every alert day is recorded"),
+    ("QUALITY_EVAL_RUNS", 500, "runs", "Monitor evaluation: the 14-day series is simulated this many times; per rule we report the share of runs with an alert before drift starts, the median days from drift start to the first alert on or after it (alert on the drift start day = 0 days), and the share of runs with no alert on or after drift start within the window"),
+    ("BANNER_MULT", 1.25, "multiplier", "ASSUMPTION (reviewer experiment only): a coverage and freshness banner raises the catch chance by 25%"),
+    ("ALERT_FATIGUE_MULT", 0.6, "multiplier", "ASSUMPTION (reviewer experiment only): alerts on 40% of items cut the catch chance by 40%"),
+    ("EXPERIMENT_ITEMS", 60, "items per condition", "ASSUMPTION: planted errors shown per condition in the reviewer experiment"),
+    ("EXPERIMENT_REVIEWERS", 12, "reviewers", "ASSUMPTION: reviewers in the reviewer experiment"),
+    ("T1", "S4 L3 D4 (RPN 48)", "scores", "ASSUMPTION: team-added failure mode 'Wrong tool selected' (Planning), not in the workbook; team-added, pending Lopa's review"),
+    ("LOPA_MODES", {"Calculation": "C1 C2 C6", "Intent": "I1 I2", "Wrong tool": "T1"}, "test IDs", "Lopa's three priority failure modes"),
+    ("MIN_INJECTED_PER_MODE", 15, "errors per run", "ASSUMPTION (strategy simulation only): each of Lopa's modes is oversampled to at least this many injected errors per run, by reassigning errors from the most common other failure types so the total stays the same. The quality series is not oversampled"),
+    ("CANARY_PER_DAY", 4, "seeded errors a day", "ASSUMPTION: known errors seeded into each day's random review slice, drawn from the natural error mix and reviewed like any other answer. More than the suite's 1 in 50 so the reviewer catch rate can be estimated, at the cost of fewer real answers reviewed"),
+    ("CORRECTION_METHOD", "raw rate / sensitivity", "", "Corrected error rate = errors found in the non-canary reviews / non-canary reviews, divided by reviewer sensitivity (canaries caught / canaries seen to date), capped at 100%. 95% interval: 2.5th-97.5th percentile of CORRECTION_DRAWS draws of Beta(found+1, misses+1) / Beta(canaries caught+1, canaries missed+1)"),
+    ("CORRECTION_DRAWS", 2000, "draws", "Monte Carlo draws for the corrected-estimate interval"),
 ]
-edges = [dict(edge='nav-cache', source='nav', target='cache', carried=1),
-         dict(edge='cache-hold', source='cache', target='hold', carried=412),
-         dict(edge='hold-calc', source='hold', target='calc', carried=268),
-         dict(edge='hold-perf', source='hold', target='perf', carried=412),
-         dict(edge='calc-answer', source='calc', target='answer', carried=268),
-         dict(edge='answer-review', source='answer', target='review', carried=268),
-         dict(edge='review-client', source='review', target='client', carried=241)]
-json.dump(nodes, open(f'{OUT}/snowball_nodes.json', 'w'), indent=0)
-json.dump(edges, open(f'{OUT}/snowball_edges.json', 'w'), indent=0)
-outcome = [
-    dict(method='Random sampling', affected=268, inspected=27, caught=6, first_catch_min=212, reached_clients=241, root_cause_found='No: each catch fixed as a one-off'),
-    dict(method='Risk-based', affected=268, inspected=268, caught=1, first_catch_min=14, reached_clients=19, root_cause_found='Yes: freshness flag clustered on one fund'),
-]
-json.dump(outcome, open(f'{OUT}/snowball_outcome.json', 'w'), indent=0)
+A = {name: value for name, value, _, _ in ASSUMPTIONS}
 
-# ---------- oversight experiment ----------
-ov = [
-    dict(condition='C1', linked='H1', label='Answer text only (baseline)', reviewers=12, shown=60, caught=21, median_s=38),
-    dict(condition='C2', linked='H2', label='Coverage and freshness banner', reviewers=12, shown=60, caught=39, median_s=44),
-    dict(condition='C3', linked='H3', label='Error after 50 correct items', reviewers=12, shown=60, caught=14, median_s=22),
-    dict(condition='C4', linked='H4', label='30 items pending in queue', reviewers=12, shown=60, caught=16, median_s=19),
-    dict(condition='C5', linked='H5', label='Wrong number looks plausible', reviewers=12, shown=60, caught=11, median_s=31),
-    dict(condition='C6', linked='H6', label="'No action needed' hard-stop", reviewers=12, shown=60, caught=52, median_s=41),
-    dict(condition='C7', linked='H7', label='Alerts on 40% of items', reviewers=12, shown=60, caught=18, median_s=17),
-    dict(condition='C8', linked='H2 + H4', label='Banner under queue load', reviewers=12, shown=60, caught=30, median_s=26),
-]
-json.dump(ov, open(f'{OUT}/oversight.json', 'w'), indent=0)
-print('wrote', OUT)
+BUDGETS = list(range(2, 31))  # % of answers reviewed
+CATCH_RATES = [0.40, 0.50, 0.62, 0.75, 0.90]
+METHODS = ["Random sampling", "Risk-based"]
+ERROR_TYPES = ["Reasoning", "Planning", "System execution"]
+CONTROL_LAYER = "Control layer (human review)"
+ILLUSTRATIVE_EVIDENCE = "Illustrative sample result; not yet run"
+
+# Failure modes the team added that are not in the workbook. Scored and tiered like the rest.
+TEAM_ADDED = [dict(
+    id="T1", layer="Agent", category="Tool selection", test="Wrong tool selected", error_type="Planning",
+    setup="The agent calls the wrong tool for the question, for example a price-lookup tool for a "
+          "performance question, or the wrong account API",
+    expected="Answer built on the wrong tool's output",
+    pass_criteria="The agent selects the right tool or flags uncertainty",
+    control="", exposure="", severity=4, likelihood=3, detectability=4,
+    team_note="Team-added, pending Lopa's review",
+)]
+LOPA_MODES = {name: ids.split() for name, ids in A["LOPA_MODES"].items()}
+
+ERROR_TYPE = {}
+for k in "D1 D2 D3 D4 D5 D6 D7 C5 S2 S4".split():
+    ERROR_TYPE[k] = "System execution"
+for k in "C4 C6 I1 I2 I4 I5 I6 O5 S1".split():
+    ERROR_TYPE[k] = "Planning"
+for t in TEAM_ADDED:
+    ERROR_TYPE[t["id"]] = t["error_type"]
+for k in "C1 C2 C3 C7 I3 O1 O2 O3 O4 O6 S3".split():
+    ERROR_TYPE[k] = "Reasoning"
+MVP = {
+    "D1": "Snowball root cause", "C6": "Calculation error", "I1": "Intent misread",
+    "C4": "Wrong tool selected", "D2": "Coverage gap", "H5": "Plausibility anchoring",
+}
+
+
+def tier(rpn: int) -> str:
+    return "Critical" if rpn >= 60 else "High" if rpn >= 36 else "Medium" if rpn >= 18 else "Low"
+
+
+def summarize(values: list[float]) -> list[int]:
+    """Integer mean and the middle-95% interval of the Monte Carlo runs."""
+    s = sorted(values)
+    lo = s[int(0.025 * (len(s) - 1))]
+    hi = s[math.ceil(0.975 * (len(s) - 1))]
+    return [round(sum(s) / len(s)), round(lo), round(hi)]
+
+
+def share_summary(num: list[int], den: list[int]) -> list[float]:
+    """Mean share (ratio of means) and middle-95% interval of per-run shares."""
+    per_run = sorted(n / d if d else 0.0 for n, d in zip(num, den))
+    lo = per_run[int(0.025 * (len(per_run) - 1))]
+    hi = per_run[math.ceil(0.975 * (len(per_run) - 1))]
+    return [round(sum(num) / max(1, sum(den)), 4), round(lo, 4), round(hi, 4)]
+
+
+def wilson(k: int, n: int, z: float = 1.959964) -> tuple[float, float]:
+    """Wilson score interval for k successes in n trials (same formula as js/shared.js)."""
+    if n == 0:
+        return 0.0, 1.0
+    p = k / n
+    den = 1 + z * z / n
+    mid = (p + z * z / (2 * n)) / den
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den
+    return max(0.0, mid - half), min(1.0, mid + half)
+
+
+# ------------------------------ reviewer model ------------------------------
+def fatigue_factor(clean_streak: int) -> float:
+    span = A["FATIGUE_FULL"] - A["FATIGUE_ONSET"]
+    level = min(1.0, max(0, clean_streak - A["FATIGUE_ONSET"]) / span)
+    return 1 - A["FATIGUE_MAX_DROP"] * level
+
+
+def load_factor(daily_reviews: float) -> float:
+    over = max(0.0, daily_reviews / A["TEAM_CAPACITY"] - 1)
+    return max(A["LOAD_FLOOR"], 1 - A["LOAD_DROP"] * over)
+
+
+def catch_prob(base: float, clean_streak: int, daily_reviews: float, plausible: bool) -> float:
+    """The one reviewer model, used for every strategy."""
+    p = base * fatigue_factor(clean_streak) * load_factor(daily_reviews)
+    return p * (A["PLAUSIBLE_MULT"] if plausible else 1.0)
+
+
+def review_queue(rng: random.Random, k: int, errors: list[dict], base_rates: list[float],
+                 daily: float) -> dict[float, list[bool]]:
+    """Places the selected errors at random positions in a shuffled queue of k items and returns,
+    per base catch rate, whether each error was caught. Streak = clean items reviewed just before."""
+    m = len(errors)
+    positions = sorted(rng.sample(range(k), m))
+    order = errors[:]
+    rng.shuffle(order)
+    prev = -1
+    probs = []
+    for pos, e in zip(positions, order):
+        streak = pos - prev - 1
+        prev = pos
+        probs.append((e, fatigue_factor(streak) * load_factor(daily)
+                      * (A["PLAUSIBLE_MULT"] if e["plausible"] else 1.0)))
+    out = {}
+    for b in base_rates:
+        out[b] = {id(e): e["u"] < b * f for e, f in probs}
+    return out
+
+
+# ------------------------------ register ------------------------------
+def register_rows(ws) -> list[tuple]:
+    """Workbook test cases followed by the team-added ones, as uniform tuples."""
+    out = []
+    for r in ws.iter_rows(min_row=5, values_only=True):
+        if not r[0]:
+            continue
+        rid, layer, cat, test, setup, _prompt, exp, passc, ctrl, s, l, d = r[:12]
+        out.append((rid, layer, cat, test, setup, exp, passc, ctrl, s, l, d, r[14], ""))
+    for t in TEAM_ADDED:
+        out.append((t["id"], t["layer"], t["category"], t["test"], t["setup"], t["expected"],
+                    t["pass_criteria"], t["control"], t["severity"], t["likelihood"],
+                    t["detectability"], t["exposure"], t["team_note"]))
+    return out
+
+
+def build_register(ws, rng: random.Random) -> list[dict]:
+    rows = []
+    for rid, layer, cat, test, setup, exp, passc, ctrl, s, l, d, reg, note in register_rows(ws):
+        rpn = s * l * d
+        is_agent = rid in ERROR_TYPE
+        # Illustrative sample result: failure more likely at high RPN. Not a real run.
+        u = rng.random()
+        p_fail = min(0.85, rpn / 110)
+        if u < 0.12:
+            status, result = "Not started", "Not run"
+        elif u < 0.12 + 0.88 * p_fail:
+            status, result = "Done", "Fail"
+        elif u < 0.12 + 0.88 * (p_fail + (1 - p_fail) * 0.35):
+            status, result = "Done", "Partial"
+        else:
+            status, result = "Done", "Pass"
+        rows.append(dict(
+            id=rid, layer=layer, category=cat, test=test,
+            area=ERROR_TYPE[rid] if is_agent else CONTROL_LAYER,
+            is_agent=is_agent, severity=s, likelihood=l, detectability=d, rpn=rpn, tier=tier(rpn),
+            high_impact=bool(is_agent and rpn >= HIGH_IMPACT_RPN),
+            status=status, result=result, result_illustrative=True, what=exp,
+            evidence=ILLUSTRATIVE_EVIDENCE, control=ctrl, exposure=reg, mvp=MVP.get(rid, ""),
+            setup=setup, pass_criteria=passc, team_added=bool(note), team_note=note,
+        ))
+    return rows
+
+
+# ------------------------------ inspection Monte Carlo ------------------------------
+MODE_OF = {tid: name for name, ids in LOPA_MODES.items() for tid in ids}
+
+
+def top_up_modes(types: list[dict], agent: list[dict], rng: random.Random) -> None:
+    """Oversamples Lopa's modes to MIN_INJECTED_PER_MODE errors (strategy simulation only) by
+    reassigning errors from the most common non-Lopa failure type, so the total is unchanged."""
+    for name, ids in LOPA_MODES.items():
+        pool = [t for t in agent if t["id"] in ids]
+        weights = [t["likelihood"] for t in pool]
+        have = sum(1 for t in types if MODE_OF.get(t["id"]) == name)
+        for _ in range(max(0, A["MIN_INJECTED_PER_MODE"] - have)):
+            counts: dict[str, int] = {}
+            for t in types:
+                if t["id"] not in MODE_OF:
+                    counts[t["id"]] = counts.get(t["id"], 0) + 1
+            if not counts:
+                return
+            most = max(sorted(counts), key=lambda k: counts[k])
+            idx = next(i for i, t in enumerate(types) if t["id"] == most)
+            types[idx] = rng.choices(pool, weights)[0]
+
+
+def mean(v: list[float]) -> float:
+    return sum(v) / len(v)
+
+
+def apportion(raw: list[float], total: int, cap: list[int] | None = None) -> list[int]:
+    """Largest-remainder rounding: integers close to raw that sum exactly to total, and (when cap
+    is given) never above cap; any excess moves to the entry with the most room."""
+    out = _apportion(raw, total)
+    if cap is not None:
+        for i in range(len(out)):
+            while out[i] > cap[i]:
+                j = max(range(len(out)), key=lambda j: (cap[j] - out[j], raw[j] - out[j]))
+                if cap[j] - out[j] <= 0:
+                    break
+                out[i] -= 1
+                out[j] += 1
+    return out
+
+
+def _apportion(raw: list[float], total: int) -> list[int]:
+    out = [math.floor(x) for x in raw]
+    order = sorted(range(len(raw)), key=lambda i: raw[i] - out[i], reverse=True)
+    diff = total - sum(out)
+    while diff > 0:
+        for i in order:
+            if diff == 0:
+                break
+            out[i] += 1
+            diff -= 1
+    while diff < 0:
+        i = next(i for i in reversed(order) if out[i] > 0)
+        out[i] -= 1
+        diff += 1
+    return out
+
+
+def block(g: dict) -> dict:
+    """Integer means and middle-95% ranges; the means reconcile:
+    caught + never_selected + reviewed_not_caught = injected, missed = injected - caught."""
+    inj, sel, cau = g["inj"], g["sel"], g["cau"]
+    never = [i - s for i, s in zip(inj, sel)]
+    rnc = [s - c for s, c in zip(sel, cau)]
+    missed = [i - c for i, c in zip(inj, cau)]
+    out = dict(injected=summarize(inj), caught=summarize(cau), never_selected=summarize(never),
+               reviewed_not_caught=summarize(rnc), missed=summarize(missed),
+               share_caught=share_summary(cau, inj))
+    settle(out)
+    return out
+
+
+def settle(b: dict) -> None:
+    b["missed"][0] = b["injected"][0] - b["caught"][0]
+    b["reviewed_not_caught"][0] = max(0, b["missed"][0] - b["never_selected"][0])
+    b["never_selected"][0] = b["missed"][0] - b["reviewed_not_caught"][0]
+
+
+def by_type_blocks(st: dict, level: str, top: dict) -> dict:
+    """Per-type blocks whose integer means add up to the displayed totals (largest remainder)."""
+    out = {t: block(st[f"{level}:{t}"]) for t in ERROR_TYPES}
+    per_run = {
+        "injected": lambda g: g["inj"], "caught": lambda g: g["cau"],
+        "never_selected": lambda g: [i - s for i, s in zip(g["inj"], g["sel"])],
+    }
+    for field, get in per_run.items():
+        cap = {"injected": None,
+               "caught": [out[t]["injected"][0] for t in ERROR_TYPES],
+               "never_selected": [out[t]["injected"][0] - out[t]["caught"][0] for t in ERROR_TYPES]}[field]
+        ints = apportion([mean(get(st[f"{level}:{t}"])) for t in ERROR_TYPES], top[field][0], cap)
+        for t, v in zip(ERROR_TYPES, ints):
+            out[t][field][0] = v
+    for t in ERROR_TYPES:
+        settle(out[t])
+    return out
+
+
+def simulate_strategies(agent: list[dict], rng: random.Random) -> tuple[list[dict], list[dict], list[dict]]:
+    n = A["N_OUTPUTS"]
+    weights = [t["likelihood"] for t in agent]
+    keys = ["inj", "sel", "cau"]
+    groups = (["hi", "all"] + [f"hi:{t}" for t in ERROR_TYPES] + [f"all:{t}" for t in ERROR_TYPES]
+              + [f"mode:{m}" for m in LOPA_MODES])
+    stats = {(m, b, c): {g: {k: [] for k in keys} for g in groups}
+             for m in METHODS for b in BUDGETS for c in CATCH_RATES}
+    # No-load sweep over review counts (the team staffed for it), for the capacity point and the
+    # ceiling. The capacity point is exact: TEAM_CAPACITY reviews a day over the period.
+    cap_k = A["TEAM_CAPACITY"] * A["PERIOD_DAYS"]
+    sweep_ks = sorted({round(n * b / 100) for b in range(1, 101)} | {cap_k})
+    sweep = {(m, c): {k: [] for k in sweep_ks} for m in METHODS for c in CATCH_RATES}
+    sweep_inj = []
+
+    for _ in range(N_RUNS):
+        n_err = sum(1 for _ in range(n) if rng.random() < A["ERROR_RATE"])
+        types = [rng.choices(agent, weights)[0] for _ in range(n_err)]
+        top_up_modes(types, agent, rng)
+        errors = []
+        for t in types:
+            et = ERROR_TYPE[t["id"]]
+            score = rng.gauss(A["GUARDRAIL_STRENGTH"] * (A["GUARDRAIL_SIGNAL"][et]
+                              + A["GUARDRAIL_SEVERITY_SLOPE"] * t["severity"]), 1.0)
+            errors.append(dict(type=et, mode=MODE_OF.get(t["id"]), hi=t["rpn"] >= HIGH_IMPACT_RPN,
+                               score=score,
+                               plausible=rng.random() < A["PLAUSIBLE_BY_DETECTABILITY"][t["detectability"]],
+                               u=rng.random()))
+        clean_scores = sorted(rng.gauss(0, 1) for _ in range(n - n_err))
+        # rank of each error among all outputs (0 = first selected)
+        perm = rng.sample(range(n), n)
+        err_scores = sorted((e["score"] for e in errors), reverse=True)
+        for i, e in enumerate(errors):
+            e["rank_random"] = perm[i]
+            higher_clean = len(clean_scores) - bisect.bisect_right(clean_scores, e["score"])
+            higher_err = sum(1 for s in err_scores if s > e["score"])
+            e["rank_risk"] = higher_clean + higher_err
+        for e in errors:
+            e["groups"] = (["all", f"all:{e['type']}"] + (["hi", f"hi:{e['type']}"] if e["hi"] else [])
+                           + ([f"mode:{e['mode']}"] if e["mode"] else []))
+        inj = dict.fromkeys(groups, 0)
+        for e in errors:
+            for g in e["groups"]:
+                inj[g] += 1
+        sweep_inj.append(inj["hi"])
+
+        for m in METHODS:
+            rank = "rank_random" if m == "Random sampling" else "rank_risk"
+            by_rank = sorted(errors, key=lambda e: e[rank])
+            ranks = [e[rank] for e in by_rank]
+            for b in BUDGETS:
+                k = round(n * b / 100)
+                sel = by_rank[:bisect.bisect_left(ranks, k)]
+                caught = review_queue(rng, k, sel, CATCH_RATES, k / A["PERIOD_DAYS"])
+                n_sel = dict.fromkeys(groups, 0)
+                for e in sel:
+                    for g in e["groups"]:
+                        n_sel[g] += 1
+                for c in CATCH_RATES:
+                    st = stats[(m, b, c)]
+                    cmap = caught[c]
+                    n_cau = dict.fromkeys(groups, 0)
+                    for e in sel:
+                        if cmap[id(e)]:
+                            for g in e["groups"]:
+                                n_cau[g] += 1
+                    for g in groups:
+                        st[g]["inj"].append(inj[g])
+                        st[g]["sel"].append(n_sel[g])
+                        st[g]["cau"].append(n_cau[g])
+            for k in sweep_ks:
+                sel = by_rank[:bisect.bisect_left(ranks, k)]
+                caught = review_queue(rng, k, sel, CATCH_RATES, 0)  # staffed for it: no load penalty
+                for c in CATCH_RATES:
+                    sweep[(m, c)][k].append(sum(1 for e in sel if e["hi"] and caught[c][id(e)]))
+
+    cells = []
+    for (m, b, c), st in stats.items():
+        k = round(n * b / 100)
+        minutes = k * A["MIN_PER_REVIEW"]
+        hi_b, all_b = block(st["hi"]), block(st["all"])
+        per_run = sorted(minutes / x if x else math.inf for x in st["hi"]["cau"])
+        lo = per_run[int(0.025 * (len(per_run) - 1))]
+        hi = per_run[math.ceil(0.975 * (len(per_run) - 1))]
+        caught_int = hi_b["caught"][0]
+        hi_types, all_types = by_type_blocks(st, "hi", hi_b), by_type_blocks(st, "all", all_b)
+        cells.append(dict(
+            method=m, budget=b, catch_rate=c, reviewed=k, reviews_per_day=round(k / A["PERIOD_DAYS"]),
+            review_minutes=round(minutes),
+            # minutes / the displayed (integer) catches, so the tile's numbers agree arithmetically
+            minutes_per_hi_caught=[round(minutes / caught_int) if caught_int else None,
+                                   round(lo) if math.isfinite(lo) else None,
+                                   round(hi) if math.isfinite(hi) else None],
+            hi=hi_b, all=all_b,
+            by_type={t: dict(hi=hi_types[t], all=all_types[t]) for t in ERROR_TYPES},
+            by_mode={name: block(st[f"mode:{name}"]) for name in LOPA_MODES},
+        ))
+
+    # Share of high-impact errors caught at team capacity, and the ceiling: the most any budget
+    # catches (reviewing everything included). Integer counts, so percentages derive from them.
+    inj_int = round(mean(sweep_inj))
+    at_capacity = [dict(method=m, catch_rate=c, budget_pct=round(cap_k * 100 / n, 1),
+                        reviews_per_day=round(cap_k / A["PERIOD_DAYS"]), injected=inj_int,
+                        caught=round(mean(sweep[(m, c)][cap_k])))
+                   for m in METHODS for c in CATCH_RATES]
+    ceiling = []
+    for c in CATCH_RATES:
+        best_m, best_k = max(((m, k) for m in METHODS for k in sweep_ks),
+                             key=lambda mk: mean(sweep[(mk[0], c)][mk[1]]))
+        ceiling.append(dict(catch_rate=c, injected=inj_int, caught=round(mean(sweep[(best_m, c)][best_k])),
+                            method=best_m, budget_pct=round(best_k * 100 / n, 1),
+                            reviews_per_day=round(best_k / A["PERIOD_DAYS"])))
+    return cells, at_capacity, ceiling
+
+
+# ------------------------------ snowball ------------------------------
+def simulate_snowball(rng: random.Random, risk_select_p: float) -> dict:
+    """Stale NAV feed from minute 0. Answers that use it arrive through the day. Random sampling
+    fixes each catch as a one-off; risk-based links clustered freshness flags to the feed and
+    blocks later answers."""
+    day, n_ans = A["SNOWBALL_DAY_MIN"], A["SNOWBALL_ANSWERS"]
+    p_catch = A["BASE_CATCH"] * A["PLAUSIBLE_MULT"]  # "-1.6%, no action needed" looks plausible
+    step = 15
+    grid = list(range(0, day + 1, step))
+    series = {m: [[] for _ in grid] for m in METHODS}
+    arrived = [[] for _ in grid]
+    res = {m: dict(reached=[], selected=[], caught=[], blocked=[], detect=[]) for m in METHODS}
+    for _ in range(N_RUNS):
+        times = sorted(rng.uniform(0, day) for _ in range(n_ans))
+        for gi, t in enumerate(grid):
+            arrived[gi].append(bisect.bisect_right(times, t))
+        for m in METHODS:
+            p_sel = A["DEFAULT_BUDGET"] / 100 if m == "Random sampling" else risk_select_p
+            reached_t, sel_n, caught_n, blocked_n = [], 0, 0, 0
+            first_catch, root_t, flagged = None, None, 0
+            for t in times:
+                if root_t is not None and t >= root_t:
+                    blocked_n += 1
+                    continue
+                selected = rng.random() < p_sel
+                caught = selected and rng.random() < p_catch
+                sel_n += selected
+                if caught:
+                    caught_n += 1
+                    first_catch = t if first_catch is None else first_catch
+                else:
+                    reached_t.append(t)
+                if m == "Risk-based" and selected:
+                    flagged += 1
+                    if flagged == A["ROOT_CAUSE_CLUSTER"] and root_t is None:
+                        root_t = t + A["INVESTIGATION_MIN"]
+            r = res[m]
+            r["reached"].append(len(reached_t))
+            r["selected"].append(sel_n)
+            r["caught"].append(caught_n)
+            r["blocked"].append(blocked_n)
+            detect = first_catch if m == "Random sampling" else root_t
+            r["detect"].append(detect if detect is not None else math.inf)
+            for gi, t in enumerate(grid):
+                series[m][gi].append(bisect.bisect_right(reached_t, t))
+
+    outcome = []
+    for m in METHODS:
+        r = res[m]
+        d = sorted(r["detect"])
+        med = d[len(d) // 2]
+        found = sum(1 for x in r["detect"] if math.isfinite(x))
+        o = dict(method=m, affected=n_ans, households=A["SNOWBALL_HOUSEHOLDS"],
+                 reviewed=summarize(r["selected"]), caught=summarize(r["caught"]),
+                 blocked=summarize(r["blocked"]), clients_reached=summarize(r["reached"]),
+                 detection_min=round(med) if math.isfinite(med) else None,
+                 detection_kind="first catch (one-off fix)" if m == "Random sampling" else "root cause identified",
+                 detected_share_of_runs=round(found / N_RUNS, 3),
+                 root_cause_found=(m == "Risk-based"))
+        # reconcile integer means: reached + caught + blocked = affected. Clients reached is kept as
+        # simulated (it matches the end of the time series); the smaller term absorbs rounding.
+        if m == "Random sampling":
+            o["caught"][0] = n_ans - o["clients_reached"][0] - o["blocked"][0]
+        else:
+            o["blocked"][0] = n_ans - o["clients_reached"][0] - o["caught"][0]
+        outcome.append(o)
+    ts = []
+    for gi, t in enumerate(grid):
+        row = dict(t=t, affected=round(sum(arrived[gi]) / N_RUNS))
+        for m, key in [("Random sampling", "random"), ("Risk-based", "risk")]:
+            row[key] = summarize(series[m][gi])
+        ts.append(row)
+    nodes = [
+        dict(node="nav", label="Vendor NAV feed", stage=0, area="System execution", affected=1, unit="fund", state="root", note="Growth fund NAV not updated from minute 0; prior close reused"),
+        dict(node="cache", label="Price cache", stage=1, area="System execution", affected=1, unit="stale price", state="propagating", note="Stale price served with no as-of timestamp"),
+        dict(node="hold", label="Holdings join", stage=2, area="System execution", affected=A["SNOWBALL_HOUSEHOLDS"], unit="households hold it", state="propagating", note=f"{A['SNOWBALL_HOUSEHOLDS']} households hold the fund"),
+        dict(node="calc", label="Impact calculator", stage=3, area="Reasoning", affected=n_ans, unit="answers that day", state="propagating", note="Fund shown as flat; loss understated"),
+        dict(node="answer", label="Agent answer", stage=4, area="Reasoning", affected=n_ans, unit="answers", state="propagating", note="'-1.6%, no action needed' reads as plausible"),
+        dict(node="review", label="Human review", stage=5, area=CONTROL_LAYER, affected=n_ans, unit="answers", state="control", note="Control layer: the reviewer checks the number, not its base or freshness"),
+        dict(node="client", label="Sent to clients", stage=6, area=CONTROL_LAYER, affected=None, unit="clients reached", state="harm", note="Answers not caught and not blocked"),
+    ]
+    edges = [dict(source=a, target=b) for a, b in
+             [("nav", "cache"), ("cache", "hold"), ("hold", "calc"), ("calc", "answer"), ("answer", "review"), ("review", "client")]]
+    return dict(budget_pct=A["DEFAULT_BUDGET"], catch_rate=A["BASE_CATCH"], step_min=step,
+                risk_select_share=round(risk_select_p, 4), catch_prob=round(p_catch, 4),
+                outcome=outcome, series=ts, nodes=nodes, edges=edges)
+
+
+# ------------------------------ quality over time ------------------------------
+def quality_day(rng: random.Random, agent: list[dict], weights: list[int], day: int,
+                drift: bool = True) -> tuple:
+    """One day's random review slice: CANARY_PER_DAY seeded known errors and the rest real answers,
+    shuffled together and reviewed by the one reviewer model. Returns (found, present, canaries
+    caught, true rate)."""
+    n_can = A["CANARY_PER_DAY"]
+    n_real = A["QUALITY_SLICE"] - n_can
+    rise = max(0, day - A["DRIFT_START_DAY"] + 1) * A["DRIFT_PER_DAY"] if drift else 0.0
+    true_rate = A["ERROR_RATE"] + rise
+    items = [(False, rng.random() < true_rate) for _ in range(n_real)] + [(True, True)] * n_can
+    rng.shuffle(items)
+    found = present = can_caught = streak = 0
+    for canary, is_err in items:
+        if not is_err:
+            streak += 1
+            continue
+        t = rng.choices(agent, weights)[0]
+        plausible = rng.random() < A["PLAUSIBLE_BY_DETECTABILITY"][t["detectability"]]
+        hit = rng.random() < catch_prob(A["BASE_CATCH"], streak, A["QUALITY_SLICE"], plausible)
+        streak = 0
+        if canary:
+            can_caught += hit
+        else:
+            present += 1
+            found += hit
+    return found, present, can_caught, true_rate
+
+
+def corrected_rate(found: int, reviewed: int, caught: int, seen: int) -> float:
+    sens = caught / seen
+    return min(1.0, (found / reviewed) / sens) if sens else (1.0 if found else 0.0)
+
+
+def beta_interval(rng: random.Random, found: int, reviewed: int, caught: int, seen: int,
+                  point: float) -> tuple[float, float]:
+    """95% interval for the corrected rate: Beta draws for the observed rate and for sensitivity.
+    Widened to include the point estimate when it falls outside (0 found)."""
+    n = A["CORRECTION_DRAWS"]
+    draws = sorted(min(1.0, rng.betavariate(found + 1, reviewed - found + 1)
+                       / rng.betavariate(caught + 1, seen - caught + 1)) for _ in range(n))
+    return min(point, draws[int(0.025 * (n - 1))]), max(point, draws[math.ceil(0.975 * (n - 1))])
+
+
+def alert_rules(found: list[int], caught_day: list[int], limit: float | None = None) -> dict:
+    """Both alert rules on one 14-day series of (errors found, canaries caught) per day. The pooled
+    rule alerts above `limit` (default: the fixed ALERT_LIMIT); the old 2-day rule always uses
+    ALERT_LIMIT."""
+    limit = A["ALERT_LIMIT"] if limit is None else limit
+    n_real, n_can, w = A["QUALITY_SLICE"] - A["CANARY_PER_DAY"], A["CANARY_PER_DAY"], A["ALERT_WINDOW_DAYS"]
+    old, new, pooled, above = [], [], [], 0
+    seen = caught = 0
+    for i, f in enumerate(found):
+        day = i + 1
+        seen += n_can
+        caught += caught_day[i]
+        above = above + 1 if corrected_rate(f, n_real, caught, seen) > A["ALERT_LIMIT"] else 0
+        if above >= A["ALERT_DAYS"]:
+            old.append(day)
+        if seen >= A["MIN_CANARIES_FOR_ALERT"]:
+            win = found[max(0, i - w + 1): i + 1]
+            est = corrected_rate(sum(win), n_real * len(win), caught, seen)
+            pooled.append(dict(day=day, found=sum(win), reviewed=n_real * len(win), first_day=day - len(win) + 1,
+                               canaries_caught=caught, canaries_seen=seen, estimate=est))
+            if est > limit:
+                new.append(day)
+        else:
+            pooled.append(None)
+    return dict(old=old, new=new, pooled=pooled)
+
+
+def rule_summary(alert_lists: list[list[int]]) -> dict:
+    """False alarms before drift, delay from drift start to the first alert on or after it, misses."""
+    d0 = A["DRIFT_START_DAY"]
+    delays = [next(d for d in a if d >= d0) - d0 for a in alert_lists if any(d >= d0 for d in a)]
+    s = sorted(delays)
+    median = None if not s else (s[len(s) // 2] if len(s) % 2 else (s[len(s) // 2 - 1] + s[len(s) // 2]) / 2)
+    return dict(runs=len(alert_lists),
+                false_alarm_runs=sum(1 for a in alert_lists if any(d < d0 for d in a)),
+                alerted_runs=len(delays), median_delay_days=median,
+                missed_runs=len(alert_lists) - len(delays))
+
+
+def simulate_quality(rng: random.Random, agent: list[dict]) -> dict:
+    """One seeded 14-day realization, shown on the chart. Real errors and canaries come from the
+    natural likelihood-weighted mix (no oversampling) and go through the same reviewer model, so a
+    reviewer cannot tell them apart. The error rate is corrected for reviewer misses with the
+    sensitivity measured on the canaries."""
+    weights = [t["likelihood"] for t in agent]
+    n_can = A["CANARY_PER_DAY"]
+    n_real = A["QUALITY_SLICE"] - n_can
+    days = []
+    seen = caught_cum = 0
+    for day in range(1, A["QUALITY_DAYS"] + 1):
+        found, present, can_caught, true_rate = quality_day(rng, agent, weights, day)
+        seen += n_can
+        caught_cum += can_caught
+        raw = found / n_real
+        sens = caught_cum / seen
+        corrected = corrected_rate(found, n_real, caught_cum, seen)
+        lo, hi = beta_interval(rng, found, n_real, caught_cum, seen, corrected)
+        s_lo, s_hi = wilson(caught_cum, seen)
+        days.append(dict(day=day, reviewed=n_real, errors_found=found, errors_present=present,
+                         raw_rate=round(raw, 4), canaries_day=n_can, canaries_caught_day=can_caught,
+                         canaries_seen=seen, canaries_caught=caught_cum,
+                         sensitivity=round(sens, 4), sensitivity_lo=round(s_lo, 4), sensitivity_hi=round(s_hi, 4),
+                         corrected=round(corrected, 4), corrected_lo=round(lo, 4), corrected_hi=round(hi, 4),
+                         true_rate=round(true_rate, 4)))
+    return dict(days=days, slice=A["QUALITY_SLICE"], canary_per_day=n_can, real_per_day=n_real,
+                correction_draws=A["CORRECTION_DRAWS"], alert_limit=A["ALERT_LIMIT"],
+                drift_start_day=A["DRIFT_START_DAY"], illustrative=True)
+
+
+def add_alert_rules(q: dict, rng: random.Random, agent: list[dict]) -> None:
+    """Applies the alert rule (and the old one, for comparison) to the illustrative run, then
+    evaluates both rules over QUALITY_EVAL_RUNS simulated 14-day series. Runs last so the draws
+    behind every other output are unchanged."""
+    days = q["days"]
+    rules = alert_rules([d["errors_found"] for d in days], [d["canaries_caught_day"] for d in days])
+    for d, p in zip(days, rules["pooled"]):
+        if p is None:
+            d["pooled"] = None
+            continue
+        lo, hi = beta_interval(rng, p["found"], p["reviewed"], p["canaries_caught"], p["canaries_seen"], p["estimate"])
+        d["pooled"] = dict(first_day=p["first_day"], found=p["found"], reviewed=p["reviewed"],
+                           corrected=round(p["estimate"], 4), lo=round(lo, 4), hi=round(hi, 4))
+    d0 = A["DRIFT_START_DAY"]
+    first_after = lambda a: next((d for d in a if d >= d0), None)  # noqa: E731
+    q.update(alerts_fixed=rules["new"],
+             warmup_day=next(d["day"] for d in days if d["canaries_seen"] >= A["MIN_CANARIES_FOR_ALERT"]),
+             min_canaries_for_alert=A["MIN_CANARIES_FOR_ALERT"], window_days=A["ALERT_WINDOW_DAYS"],
+             old_rule=dict(alert_days=A["ALERT_DAYS"], alerts=rules["old"],
+                           alert_day=rules["old"][0] if rules["old"] else None,
+                           drift_alert_day=first_after(rules["old"])))
+    weights = [t["likelihood"] for t in agent]
+    new_lists, old_lists = [], []
+    for _ in range(A["QUALITY_EVAL_RUNS"]):
+        found, caught = [], []
+        for day in range(1, A["QUALITY_DAYS"] + 1):
+            f, _, c, _ = quality_day(rng, agent, weights, day)
+            found.append(f)
+            caught.append(c)
+        r = alert_rules(found, caught)
+        new_lists.append(r["new"])
+        old_lists.append(r["old"])
+    previous = dict(runs=A["QUALITY_EVAL_RUNS"], pooled_fixed=rule_summary(new_lists), old_2day=rule_summary(old_lists))
+    calibrate_alert_limit(q, rng, agent, previous)
+
+
+def simulate_series(rng: random.Random, agent: list[dict], drift: bool) -> tuple[list[int], list[int]]:
+    weights = [t["likelihood"] for t in agent]
+    found, caught = [], []
+    for day in range(1, A["QUALITY_DAYS"] + 1):
+        f, _, c, _ = quality_day(rng, agent, weights, day, drift)
+        found.append(f)
+        caught.append(c)
+    return found, caught
+
+
+def calibrate_alert_limit(q: dict, rng: random.Random, agent: list[dict], previous: dict) -> None:
+    """Pre-specified: T is the smallest limit at which at most ALERT_FALSE_ALARM_BUDGET of no-drift
+    runs raise any alert after the warm-up. Evaluated on fresh drift runs and a fresh no-drift set."""
+    n_runs = A["QUALITY_EVAL_RUNS"]
+    allowed = math.floor(A["ALERT_FALSE_ALARM_BUDGET"] * n_runs)
+    # 1. calibration set: no drift. A run alerts at T exactly when its highest pooled estimate is above T.
+    maxima = []
+    for _ in range(n_runs):
+        pooled = alert_rules(*simulate_series(rng, agent, drift=False))["pooled"]
+        maxima.append(max(p["estimate"] for p in pooled if p))
+    maxima.sort(reverse=True)
+    limit = math.ceil(maxima[allowed] * 10000) / 10000
+    cal_alerts = sum(1 for m in maxima if m > limit)
+    # 2. fresh drift runs: the calibrated rule and, on the same runs, the previous rules at 8%
+    cal, fixed, old = [], [], []
+    for _ in range(n_runs):
+        series = simulate_series(rng, agent, drift=True)
+        cal.append(alert_rules(*series, limit)["new"])
+        r = alert_rules(*series)
+        fixed.append(r["new"])
+        old.append(r["old"])
+    # 3. a second fresh no-drift set, as a check on the false-alarm share
+    check = sum(1 for _ in range(n_runs) if alert_rules(*simulate_series(rng, agent, drift=False), limit)["new"])
+
+    days = q["days"]
+    rules = alert_rules([d["errors_found"] for d in days], [d["canaries_caught_day"] for d in days], limit)
+    d0 = A["DRIFT_START_DAY"]
+    first_after = lambda a: next((d for d in a if d >= d0), None)  # noqa: E731
+    q.update(alert_limit=limit, alert_limit_kind="calibrated", fixed_limit=A["ALERT_LIMIT"],
+             false_alarm_budget=A["ALERT_FALSE_ALARM_BUDGET"],
+             alerts=rules["new"], alert_day=rules["new"][0] if rules["new"] else None,
+             drift_alert_day=first_after(rules["new"]))
+    q["previous_rules"] = dict(
+        pooled_fixed=dict(limit=A["ALERT_LIMIT"], alerts=q.pop("alerts_fixed")),
+        old_2day=dict(limit=A["ALERT_LIMIT"], **q.pop("old_rule")))
+    q["evaluation"] = dict(
+        runs=n_runs,
+        calibration=dict(runs=n_runs, drift=False, budget=A["ALERT_FALSE_ALARM_BUDGET"], allowed_runs=allowed,
+                         alert_runs=cal_alerts, limit=limit),
+        drift=dict(runs=n_runs, calibrated=rule_summary(cal), pooled_fixed=rule_summary(fixed), old_2day=rule_summary(old)),
+        check_no_drift=dict(runs=n_runs, drift=False, alert_runs=check),
+        previous=previous)
+
+
+# ------------------------------ reviewer experiment ------------------------------
+def simulate_oversight(rng: random.Random) -> list[dict]:
+    base = A["BASE_CATCH"]
+    conditions = [
+        ("C1", "H1", "Baseline: answer text only", base),
+        ("C2", "H2", "Coverage and freshness banner", min(0.98, base * A["BANNER_MULT"])),
+        ("C3", "H3", "After 50 clean items", catch_prob(base, A["FATIGUE_FULL"], 0, False)),
+        ("C4", "H4", "30 items queued", catch_prob(base, 0, 2 * A["TEAM_CAPACITY"], False)),
+        ("C5", "H5", "Wrong number looks plausible", catch_prob(base, 0, 0, True)),
+        ("C6", "H7", "Alert fatigue (alerts on 40% of items)", base * A["ALERT_FATIGUE_MULT"]),
+    ]
+    n = A["EXPERIMENT_ITEMS"]
+    return [dict(condition=c, linked=h, label=label, reviewers=A["EXPERIMENT_REVIEWERS"], shown=n,
+                 caught=sum(1 for _ in range(n) if rng.random() < p), model_p=round(p, 3),
+                 illustrative=True)
+            for c, h, label, p in conditions]
+
+
+def main(xlsx: Path, out: Path) -> None:
+    rng = random.Random(SEED)
+    out.mkdir(parents=True, exist_ok=True)
+    ws = openpyxl.load_workbook(xlsx)["Test Cases"]
+    rows = build_register(ws, rng)
+    agent = [r for r in rows if r["is_agent"]]
+
+    log.info("simulating %d runs of the inspection strategies", N_RUNS)
+    cells, at_capacity, ceiling = simulate_strategies(agent, rng)
+    default = next(c for c in cells if c["method"] == "Risk-based" and c["budget"] == A["DEFAULT_BUDGET"]
+                   and c["catch_rate"] == A["BASE_CATCH"])
+    sysx = default["by_type"]["System execution"]["all"]
+    risk_select_p = 1 - sysx["never_selected"][0] / sysx["injected"][0]
+
+    log.info("simulating the snowball, quality series and reviewer experiment")
+    snowball = simulate_snowball(rng, risk_select_p)
+    quality = simulate_quality(rng, agent)
+    oversight = simulate_oversight(rng)
+    log.info("evaluating the quality alert rules over %d runs", A["QUALITY_EVAL_RUNS"])
+    add_alert_rules(quality, rng, agent)
+
+    meta = dict(
+        seed=SEED, n_runs=N_RUNS, high_impact_rpn=HIGH_IMPACT_RPN,
+        high_impact_types=[r["id"] for r in agent if r["high_impact"]],
+        error_types=ERROR_TYPES, control_layer=CONTROL_LAYER, methods=METHODS,
+        budgets=BUDGETS, catch_rates=CATCH_RATES,
+        default_budget=A["DEFAULT_BUDGET"], default_catch_rate=A["BASE_CATCH"],
+        team_capacity=A["TEAM_CAPACITY"], outputs=A["N_OUTPUTS"], period_days=A["PERIOD_DAYS"],
+        outputs_per_day=A["N_OUTPUTS"] // A["PERIOD_DAYS"], min_per_review=A["MIN_PER_REVIEW"],
+        at_capacity=at_capacity, ceiling=ceiling,
+        lopa_modes=LOPA_MODES, min_injected_per_mode=A["MIN_INJECTED_PER_MODE"],
+        assumptions=[dict(name=nm, value=v, unit=u, comment=cm) for nm, v, u, cm in ASSUMPTIONS],
+    )
+    files = {"risks": rows, "sim_grid": cells, "sim_meta": meta, "snowball": snowball,
+             "quality": quality, "oversight": oversight}
+    for name, data in files.items():
+        indent = None if name == "sim_grid" else 1
+        (out / f"{name}.json").write_text(json.dumps(data, indent=indent, separators=(",", ":") if indent is None else None))
+    for old in ["strategy_curve", "strategy_summary", "strategy_by_area",
+                "snowball_nodes", "snowball_edges", "snowball_outcome"]:
+        (out / f"{old}.json").unlink(missing_ok=True)
+    log.info("wrote %s", out)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    main(Path(sys.argv[1]), Path(sys.argv[2]))

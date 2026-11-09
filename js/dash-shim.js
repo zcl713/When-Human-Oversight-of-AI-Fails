@@ -7,10 +7,14 @@
  *                                again whenever data loads, the tab changes or the width changes
  *   dash.colors                  series colours (CSS variables, so they follow light/dark)
  *   dash.setLink(name)           puts the tab name in the URL hash and redraws
- * Data files are listed in DATASETS and loaded from data/<id>.json.
+ *   dash.refresh()               redraws everything visible (used by the sliders)
+ * Data files are listed in the script tag's data-datasets attribute and loaded from
+ * <data-base>data/<id>.json, so pages in sub-folders (lean/) can share the same data/ folder.
  */
 (function () {
-  const DATASETS = ['risks', 'strategy_curve', 'strategy_summary', 'strategy_by_area', 'snowball_nodes', 'snowball_edges', 'snowball_outcome'];
+  const me = document.currentScript;
+  const BASE = (me && me.dataset.base) || '';
+  const DATASETS = ((me && me.dataset.datasets) || '').split(/\s+/).filter(Boolean);
   const state = {};
   const calcs = [];
   const draws = {};
@@ -36,13 +40,13 @@
     params() { return {}; },
     setParams() {},
     resetParams() {},
-    refresh() {},
+    refresh() { drawAll(); },
   };
 
   async function load() {
     await Promise.all(DATASETS.map(async (id) => {
       try {
-        const res = await fetch('data/' + id + '.json');
+        const res = await fetch(BASE + 'data/' + id + '.json');
         if (!res.ok) throw new Error('HTTP ' + res.status);
         state[id] = {status: 'ok', data: await res.json(), message: ''};
       } catch (err) {

@@ -2,11 +2,12 @@
  {
   "condition": "C1",
   "linked": "H1",
-  "label": "Answer text only (baseline)",
+  "label": "Baseline: answer text only",
   "reviewers": 12,
   "shown": 60,
-  "caught": 21,
-  "median_s": 38
+  "caught": 39,
+  "model_p": 0.62,
+  "illustrative": true
  },
  {
   "condition": "C2",
@@ -14,26 +15,29 @@
   "label": "Coverage and freshness banner",
   "reviewers": 12,
   "shown": 60,
-  "caught": 39,
-  "median_s": 44
+  "caught": 41,
+  "model_p": 0.775,
+  "illustrative": true
  },
  {
   "condition": "C3",
   "linked": "H3",
-  "label": "Error after 50 correct items",
+  "label": "After 50 clean items",
   "reviewers": 12,
   "shown": 60,
-  "caught": 14,
-  "median_s": 22
+  "caught": 26,
+  "model_p": 0.403,
+  "illustrative": true
  },
  {
   "condition": "C4",
   "linked": "H4",
-  "label": "30 items pending in queue",
+  "label": "30 items queued",
   "reviewers": 12,
   "shown": 60,
-  "caught": 16,
-  "median_s": 19
+  "caught": 34,
+  "model_p": 0.465,
+  "illustrative": true
  },
  {
   "condition": "C5",
@@ -41,34 +45,18 @@
   "label": "Wrong number looks plausible",
   "reviewers": 12,
   "shown": 60,
-  "caught": 11,
-  "median_s": 31
+  "caught": 24,
+  "model_p": 0.341,
+  "illustrative": true
  },
  {
   "condition": "C6",
-  "linked": "H6",
-  "label": "'No action needed' hard-stop",
-  "reviewers": 12,
-  "shown": 60,
-  "caught": 52,
-  "median_s": 41
- },
- {
-  "condition": "C7",
   "linked": "H7",
-  "label": "Alerts on 40% of items",
+  "label": "Alert fatigue (alerts on 40% of items)",
   "reviewers": 12,
   "shown": 60,
-  "caught": 18,
-  "median_s": 17
- },
- {
-  "condition": "C8",
-  "linked": "H2 + H4",
-  "label": "Banner under queue load",
-  "reviewers": 12,
-  "shown": 60,
-  "caught": 30,
-  "median_s": 26
+  "caught": 19,
+  "model_p": 0.372,
+  "illustrative": true
  }
 ]
