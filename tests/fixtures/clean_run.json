@@ -1,0 +1,52 @@
+{
+  "run_id": "3f2a9c1e5b7d4a80916c2e4d8b0f7a31",
+  "timestamp": "2026-03-10T14:05:00",
+  "household_id": "HH-0001",
+  "advisor_id": "ADV-01",
+  "prompt": "How much has my portfolio lost today?",
+  "conversation_turn": 1,
+
+  "resolved_intent": "portfolio_impact_today",
+  "alternatives_considered": [
+    {"intent": "portfolio_impact_today", "score": 0.92},
+    {"intent": "portfolio_performance_ytd", "score": 0.05}
+  ],
+  "accounts_requested": ["taxable", "ira", "401k_held_away"],
+  "accounts_resolved": ["taxable", "ira", "401k_held_away"],
+  "time_window": "intraday",
+  "benchmark_index": null,
+  "interpretation_restated": true,
+
+  "tool_calls": [
+    {"tool_name": "get_client_accounts", "args": {"household_id": "HH-0001"}, "status": "ok", "latency_ms": 120, "output_hash": "a1b2c3"},
+    {"tool_name": "get_positions", "args": {"household_id": "HH-0001"}, "status": "ok", "latency_ms": 210, "output_hash": "d4e5f6"},
+    {"tool_name": "get_market_prices", "args": {"as_of": "2026-03-10T14:05:00"}, "status": "ok", "latency_ms": 340, "output_hash": "070809"},
+    {"tool_name": "calculate_portfolio_impact", "args": {}, "status": "ok", "latency_ms": 45, "output_hash": "0a0b0c"}
+  ],
+  "expected_tool_set": ["get_client_accounts", "get_positions", "get_market_prices", "calculate_portfolio_impact"],
+
+  "holdings": [
+    {"qty": 1000, "price": 450.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "equity_etf"},
+    {"qty": 2000, "price": 100.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "mutual_fund"},
+    {"qty": 4000, "price": 50.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "bond_fund"},
+    {"qty": 500, "price": 300.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "equity_etf"},
+    {"qty": 1000, "price": 100.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "mutual_fund"},
+    {"qty": 1000, "price": 100.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "mutual_fund"}
+  ],
+
+  "accounts_in_crm": ["taxable", "ira", "401k_held_away"],
+  "accounts_in_feed": ["taxable", "ira", "401k_held_away"],
+  "data_snapshot_id": "snap-2026-03-10-1405",
+
+  "inputs": {"holdings": 6},
+  "base": 1200000.0,
+  "calc_as_of": "2026-03-10T14:05:00",
+  "computed_by": "tool",
+  "intermediate_values": {"covered_value": 1200000.0},
+
+  "numbers_claimed": [-21700.0],
+  "number_to_tool_output_links": [{"number": -21700.0, "output_hash": "0a0b0c"}],
+  "certainty_and_advice_phrases": [],
+  "estimate_label": false,
+  "disclosures_present": true
+}
