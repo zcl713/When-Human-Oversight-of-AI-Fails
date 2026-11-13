@@ -47,10 +47,14 @@ class Holding(BaseModel):
 
 
 class NumberLink(BaseModel):
-    """A claimed number linked to the tool output it came from. TODO(stage 3): confirm shape."""
+    """A number in the answer text matched to the tool output or calculation value it came from.
 
-    number: float
-    output_hash: str
+    Derived by the QA layer. `source` is None when no match is found, i.e. the number is ungrounded.
+    TODO(stage 3): the format of `source` (output hash vs calculation value name) is not fixed.
+    """
+
+    number: str  # as displayed in the answer, e.g. "-$13,400" or "-1.2%"
+    source: str | None
 
 
 class RunTrace(BaseModel):

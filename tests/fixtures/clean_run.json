@@ -45,7 +45,7 @@
   "intermediate_values": {"covered_value": 1200000.0},
 
   "numbers_claimed": [-21700.0],
-  "number_to_tool_output_links": [{"number": -21700.0, "output_hash": "0a0b0c"}],
+  "number_to_tool_output_links": [{"number": "-$21,700", "source": "0a0b0c"}, {"number": "-1.8%", "source": "0a0b0c"}],
   "certainty_and_advice_phrases": [],
   "estimate_label": false,
   "disclosures_present": true

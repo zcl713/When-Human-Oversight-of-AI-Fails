@@ -15,4 +15,3 @@
 - Only the data synthesis pipeline is scaffolded. Checks, scoring and evaluation are added when
   we design them; how risk is computed and which checks to build are not settled.
 - Tooling: uv, ruff, pytest, mypy, poethepoet (no Makefile, so it works on Windows and macOS).
-- Work happens directly on `main` while nobody else is working in the repo.
