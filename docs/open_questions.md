@@ -11,3 +11,6 @@
 - Which checks to build and how risk is computed (not scaffolded yet). Intent-ambiguity: independent classifier vs rule.
 - Exact December 2026 deliverable date.
 - Optional later: 200-300 real LLM runs against the mock tools to check injected error signatures look realistic.
+- ID for the "wrong tool" failure mode (old prototype used T1, pending Lopa's review). Not in `FailureModeId` yet.
+- Severity formula for the hidden label (suite severity score plus dollar error). `RunLabel.severity` is a plain float for now.
+- Shape of `number_to_tool_output_links` (currently number + output_hash).
