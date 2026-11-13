@@ -1,0 +1,10 @@
+# Defaults for the synthetic data generator. Counts are open decisions (docs/open_questions.md):
+# the values below are the recommended ones, not agreed.
+seed: 20260101
+n_households: 750
+n_days: 180
+questions_per_day: 60
+review_capacity_k: [0.05, 0.10]   # fraction of runs reviewed (used later, by evaluation)
+split:
+  test_household_fraction: 0.2
+  test_date_fraction: 0.2

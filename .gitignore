@@ -1,0 +1,20 @@
+# generated / downloaded data (never committed)
+data/raw/*
+data/interim/*
+data/synthetic/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/synthetic/.gitkeep
+.env
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
