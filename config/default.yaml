@@ -9,3 +9,18 @@ review_capacity_k: [0.05, 0.10]   # fraction of runs reviewed
 split:
   test_household_fraction: 0.2
   test_date_fraction: 0.2
+
+# Household layer (src/advisor_qa/world). All values are assumptions unless the comment says SCF.
+households:
+  etf_share_of_fund_dollars: 0.5     # SCF cannot split fund dollars into ETF vs mutual fund; sweep 0.2 / 0.5 / 0.8
+  n_advisors: 25
+  band_min_fin: 250000               # SCF FIN filter
+  band_max_fin: 5000000
+  min_modelled_value: 100000         # drop records whose modelled holdings (incl. cash) are below this
+  min_holding_value: 5000            # smaller pools are merged into the account's largest pool
+  unique_families: true              # never draw two records of the same SCF family
+  speculative_household_rate: 0.10   # share of households holding options/leveraged ETFs (not in SCF)
+  speculative_max_equity_share: 0.03
+  target_date_share_of_retirement: 0.4
+  trust_equity_share: 0.6
+  held_away_not_in_crm_rate: 0.0     # 0 = every account is in the CRM in the clean data

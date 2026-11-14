@@ -8,17 +8,17 @@ EXPECTED_GROUP_COUNTS = {
     "Run": 6,
     "Intent and scope": 7,
     "Tool calls": 6,
-    "Data, per holding": 5,
+    "Data, per holding": 7,
     "Data, per run": 3,
     "Calculation": 5,
     "Answer": 5,
 }
 
 
-def test_trace_has_37_fields_in_7_groups() -> None:
+def test_trace_has_39_fields_in_7_groups() -> None:
     fields = schema_fields()
 
-    assert len(fields) == 37
+    assert len(fields) == 39
     assert dict(Counter(f.group for f in fields)) == EXPECTED_GROUP_COUNTS
 
 

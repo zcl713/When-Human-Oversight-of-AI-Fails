@@ -1,8 +1,8 @@
 {
   "run_id": "3f2a9c1e5b7d4a80916c2e4d8b0f7a31",
   "timestamp": "2026-03-10T14:05:00",
-  "household_id": "HH-0001",
-  "advisor_id": "ADV-01",
+  "household_id": "HH-004217",
+  "advisor_id": "ADV-0382",
   "prompt": "How much has my portfolio lost today?",
   "conversation_turn": 1,
 
@@ -18,20 +18,20 @@
   "interpretation_restated": true,
 
   "tool_calls": [
-    {"tool_name": "get_client_accounts", "args": {"household_id": "HH-0001"}, "status": "ok", "latency_ms": 120, "output_hash": "a1b2c3"},
-    {"tool_name": "get_positions", "args": {"household_id": "HH-0001"}, "status": "ok", "latency_ms": 210, "output_hash": "d4e5f6"},
+    {"tool_name": "get_client_accounts", "args": {"household_id": "HH-004217"}, "status": "ok", "latency_ms": 120, "output_hash": "a1b2c3"},
+    {"tool_name": "get_positions", "args": {"household_id": "HH-004217"}, "status": "ok", "latency_ms": 210, "output_hash": "d4e5f6"},
     {"tool_name": "get_market_prices", "args": {"as_of": "2026-03-10T14:05:00"}, "status": "ok", "latency_ms": 340, "output_hash": "070809"},
     {"tool_name": "calculate_portfolio_impact", "args": {}, "status": "ok", "latency_ms": 45, "output_hash": "0a0b0c"}
   ],
   "expected_tool_set": ["get_client_accounts", "get_positions", "get_market_prices", "calculate_portfolio_impact"],
 
   "holdings": [
-    {"qty": 1000, "price": 450.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "equity_etf"},
-    {"qty": 2000, "price": 100.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "mutual_fund"},
-    {"qty": 4000, "price": 50.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "bond_fund"},
-    {"qty": 500, "price": 300.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "equity_etf"},
-    {"qty": 1000, "price": 100.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "mutual_fund"},
-    {"qty": 1000, "price": 100.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "mutual_fund"}
+    {"account_id": "ACC-88120", "instrument_id": "INS-01", "qty": 1000, "price": 450.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "equity_etf"},
+    {"account_id": "ACC-88120", "instrument_id": "INS-05", "qty": 2000, "price": 100.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "mutual_fund"},
+    {"account_id": "ACC-88121", "instrument_id": "INS-08", "qty": 4000, "price": 50.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "bond_fund"},
+    {"account_id": "ACC-88120", "instrument_id": "INS-02", "qty": 500, "price": 300.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "equity_etf"},
+    {"account_id": "ACC-88121", "instrument_id": "INS-06", "qty": 1000, "price": 100.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "mutual_fund"},
+    {"account_id": "ACC-88122", "instrument_id": "INS-03", "qty": 1000, "price": 100.0, "price_as_of": "2026-03-10T14:05:00", "price_source": "feed", "instrument_type": "equity_etf"}
   ],
 
   "accounts_in_crm": ["taxable", "ira", "401k_held_away"],

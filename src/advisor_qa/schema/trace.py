@@ -1,4 +1,4 @@
-"""Run trace: what the QA layer sees for one agent run (hand-off section 5, 37 fields).
+"""Run trace: what the QA layer sees for one agent run (hand-off section 5, 39 fields).
 
 Every field carries its group and source category as metadata. The hidden error label lives in
 `schema.labels`, never here.
@@ -39,6 +39,8 @@ class ToolCall(BaseModel):
 
 
 class Holding(BaseModel):
+    account_id: str = meta("Data, per holding", E)
+    instrument_id: str = meta("Data, per holding", E)
     qty: float = meta("Data, per holding", E)
     price: float = meta("Data, per holding", E)
     price_as_of: datetime = meta("Data, per holding", E)

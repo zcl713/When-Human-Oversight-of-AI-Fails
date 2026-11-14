@@ -5,6 +5,9 @@ description = "Synthetic agent traces with hidden error labels for a QA layer on
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "numpy>=2.4.6",
+    "openpyxl>=3.1.5",
+    "pandas>=3.1.1",
     "pydantic>=2.7",
     "pyyaml>=6.0",
 ]
@@ -16,6 +19,7 @@ dev = [
     "mypy>=1.10",
     "types-PyYAML",
     "poethepoet>=0.27",
+    "pandas-stubs>=3.1.0.261029",
 ]
 
 [build-system]

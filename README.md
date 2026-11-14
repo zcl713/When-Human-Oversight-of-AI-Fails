@@ -34,6 +34,15 @@ evaluation come later. See `docs/decisions.md` and `docs/open_questions.md`.
 | `uv run poe format` | Auto-format (ruff) |
 | `uv run poe typecheck` | Type-check (mypy, strict) |
 
+Build the household tables (about 50 households, fixture included; needs the SCF extract, see
+`data/README.md`):
+
+```
+uv run python -m advisor_qa.world.build --n 50 --out data/synthetic/v0 --scf-path <path to SCFP2025.xlsx>
+```
+
+If `uv` fails with a hardlink error (repo inside OneDrive), set `UV_LINK_MODE=copy`.
+
 Add a dependency with `uv add <package>` (or `uv add --dev <package>`) and commit `pyproject.toml`
 and `uv.lock`.
 
