@@ -83,12 +83,14 @@ def marginals(t: WorldTables, pool: pd.DataFrame) -> pd.DataFrame:
 
 def etf_share_realised(t: WorldTables) -> float:
     """ETF share of dollars in pools that have both an ETF and a mutual-fund option.
-    Sampled households only (the hand-built fixture is excluded)."""
+    Sampled households only (the hand-built fixture is excluded), and held-away 401(k)s are left
+    out because they can be mutual-fund-only (`held_away_mutual_funds_only`)."""
     inst = t.instruments.set_index("instrument_id")
     both = {"us_equity_large", "us_equity_total", "us_equity_dividend", "us_equity_growth",
             "us_bond_intermediate", "us_bond_treasury", "us_bond_short"}  # fmt: skip
     sampled = t.households.loc[~t.households["is_fixture"], "household_id"]
-    x = t.holdings[t.holdings["household_id"].isin(sampled)]
+    away = t.accounts.loc[t.accounts["held_away"], "account_id"]
+    x = t.holdings[t.holdings["household_id"].isin(sampled) & ~t.holdings["account_id"].isin(away)]
     x = x[x["instrument_id"].map(inst["asset_class"]).isin(both)]
     is_mf = x["instrument_id"].map(inst["is_mutual_fund"]).astype(bool)
     return float(x.loc[~is_mf, "value_usd"].sum() / x["value_usd"].sum())

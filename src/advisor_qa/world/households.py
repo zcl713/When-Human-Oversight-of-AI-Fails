@@ -139,15 +139,15 @@ def _household_rows(
     for acct_type, pools in _account_pools(row, p, rng).items():
         pools = _merge_small(pools, p.min_holding_value)
         by_instrument: dict[str, float] = {}
+        mf_only = acct_type == HELD_AWAY and p.held_away_mutual_funds_only
+        etf_share = 0.0 if mf_only else p.etf_share_of_fund_dollars
         for pool, dollars in pools.items():
             c = (
                 Candidates((), (target_date_id(inst, float(row["AGE"])),))
                 if pool == "tdf"
                 else cands[pool]
             )
-            for ins, amt in _split(
-                dollars, c, rng, p.etf_share_of_fund_dollars, p.min_holding_value
-            ):
+            for ins, amt in _split(dollars, c, rng, etf_share, p.min_holding_value):
                 by_instrument[ins] = by_instrument.get(ins, 0.0) + amt
         if by_instrument:
             result.append((acct_type, by_instrument))

@@ -24,3 +24,4 @@ households:
   target_date_share_of_retirement: 0.4
   trust_equity_share: 0.6
   held_away_not_in_crm_rate: 0.0     # 0 = every account is in the CRM in the clean data
+  held_away_mutual_funds_only: true  # generated 401(k)s hold mutual funds only (fixture is exempt)

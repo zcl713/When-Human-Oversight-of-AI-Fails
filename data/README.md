@@ -5,9 +5,9 @@
 | `reference/` | Hand-entered tables: instrument archetypes, test catalogue | yes |
 | `raw/` | Downloaded source data (SCF, prices, FRED) | no |
 | `interim/` | Cleaned intermediate data | no |
-| `synthetic/` | Generated `runs.parquet` and `labels.parquet` | no |
+| `synthetic/` | Generated tables: household CSVs now; runs and labels files later (format open) | no |
 
-Licence terms for each source go in this file once a source is chosen. No real client data anywhere.
+Licence terms for each source are listed below. No real client data anywhere.
 
 ## Sources
 
@@ -25,5 +25,5 @@ Licence terms for each source go in this file once a source is chosen. No real c
 ### What is generated, not SCF
 Advisors, account IDs, security-level holdings, ETF vs mutual-fund split, options/leveraged ETF
 holders, `in_crm` flags and the fixture household HH-004217. See `config/default.yaml` (`households:`)
-and `data/reference/instruments.csv` (`reference_price` is a nominal price, not a quote; rows marked
-`TODO(verify)` need checking against public factsheets).
+and `data/reference/instruments.csv` (`reference_price` is a nominal price, not a quote; each row's `notes`
+say what was checked against public factsheets on 2026-11-13 and what was not).

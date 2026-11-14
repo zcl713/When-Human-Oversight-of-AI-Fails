@@ -22,6 +22,7 @@ class HouseholdParams(BaseModel):
     target_date_share_of_retirement: float = 0.4
     trust_equity_share: float = 0.6
     held_away_not_in_crm_rate: float = 0.0
+    held_away_mutual_funds_only: bool = True
 
 
 def load_config(path: Path = DEFAULT_CONFIG) -> tuple[int, HouseholdParams]:

@@ -90,3 +90,15 @@ def test_held_away_can_be_missing_from_crm() -> None:
     ]
 
     assert len(ha) > 0 and not ha["in_crm"].any()
+
+
+@pytest.mark.parametrize("mf_only", [True, False])
+def test_held_away_mutual_funds_only(mf_only: bool) -> None:
+    world, _ = build(n=55, etf_share_of_fund_dollars=0.8, held_away_mutual_funds_only=mf_only)
+    is_mf = world.instruments.set_index("instrument_id")["is_mutual_fund"]
+    away = world.accounts["held_away"] & (world.accounts["household_id"] != "HH-004217")
+    held = world.holdings[world.holdings["account_id"].isin(world.accounts[away]["account_id"])]
+    all_mf = bool(is_mf[held["instrument_id"]].all())
+
+    assert len(held) > 0
+    assert all_mf is mf_only

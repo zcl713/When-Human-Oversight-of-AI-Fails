@@ -1,22 +1,22 @@
 instrument_id,archetype,ticker,instrument_type,asset_class,duration_years,is_mutual_fund,pricing,proxy_ticker,reference_price,notes
-INS-01,large_cap_etf,SPY,equity_etf,us_equity_large,,false,intraday,,450,"reference_price is a nominal fixed price used to turn SCF dollars into share counts, NOT a market quote. Fixture instrument."
-INS-02,large_cap_etf,IVV,equity_etf,us_equity_large,,false,intraday,,300,Nominal price. Fixture instrument.
-INS-03,total_market_etf,VTI,equity_etf,us_equity_total,,false,intraday,,100,Nominal price. Fixture instrument (held-away holding).
-INS-04,dividend_equity_etf,SCHD,equity_etf,us_equity_dividend,,false,intraday,,80,Nominal price.
-INS-05,growth_mutual_fund,FCNTX,mutual_fund,us_equity_growth,,true,end_of_day_nav,VUG,100,Nominal price. Fixture instrument. TODO(verify) ticker and proxy.
-INS-06,growth_mutual_fund,AGTHX,mutual_fund,us_equity_growth,,true,end_of_day_nav,VUG,100,Nominal price. Fixture instrument. TODO(verify) ticker and proxy.
-INS-07,large_blend_mutual_fund,VFIAX,mutual_fund,us_equity_large,,true,end_of_day_nav,SPY,250,Nominal price. TODO(verify) ticker and proxy.
-INS-08,intermediate_bond_etf,BND,bond_fund,us_bond_intermediate,6.0,false,intraday,,50,Fixture instrument (duration case). TODO(verify) duration from factsheet.
-INS-09,intermediate_bond_mutual_fund,VBTLX,bond_fund,us_bond_intermediate,6.0,true,end_of_day_nav,BND,10,Nominal price. TODO(verify) duration and ticker.
-INS-10,short_term_bond_etf,BSV,bond_fund,us_bond_short,2.6,false,intraday,,80,Stand-in for SCF CDs. TODO(verify) duration.
-INS-11,short_term_bond_mutual_fund,VBIRX,bond_fund,us_bond_short,2.7,true,end_of_day_nav,BSV,10,Stand-in for SCF CDs. TODO(verify) duration and ticker.
-INS-12,muni_bond_mutual_fund,VWIUX,bond_fund,us_bond_muni,5.5,true,end_of_day_nav,MUB,10,SCF tax-free bond funds (TFBMUTF). TODO(verify) duration and ticker.
-INS-13,treasury_bond_etf,GOVT,bond_fund,us_bond_treasury,6.0,false,intraday,,25,SCF direct bonds (BOND). TODO(verify) duration.
-INS-14,target_date_2030,VTHRX,target_date_fund,multi_asset,,true,end_of_day_nav,,25,No single-ETF proxy. TODO(verify) ticker.
-INS-15,target_date_2040,VFORX,target_date_fund,multi_asset,,true,end_of_day_nav,,40,No single-ETF proxy. TODO(verify) ticker.
-INS-16,target_date_2050,VFIFX,target_date_fund,multi_asset,,true,end_of_day_nav,,50,No single-ETF proxy. TODO(verify) ticker.
-INS-17,target_date_income,VTINX,target_date_fund,multi_asset,,true,end_of_day_nav,,15,No single-ETF proxy. TODO(verify) ticker.
-INS-18,money_market_fund,VMFXX,money_market_fund,cash,0.1,true,end_of_day_nav,,1,Stable $1 NAV. Holds SCF liquid assets (LIQ). Assumption: LIQ is visible to the advisor.
-INS-19,options_income_etf,JEPI,options_etf,equity_options_income,,false,intraday,,55,Not in SCF; our assumption. TODO(verify) ticker.
-INS-20,leveraged_etf_2x,SSO,leveraged_etf,equity_leveraged,,false,intraday,,60,Not in SCF; our assumption. TODO(verify) ticker.
-INS-21,leveraged_etf_3x,TQQQ,leveraged_etf,equity_leveraged,,false,intraday,,70,Not in SCF; our assumption. TODO(verify) ticker.
+INS-01,large_cap_etf,SPY,equity_etf,us_equity_large,,false,intraday,,450,"reference_price is a nominal fixed price used to turn SCF dollars into share counts, NOT a market quote. Fixture instrument. Checked 2026-11-13: ticker and S&P 500 benchmark (third-party comparison pages only)."
+INS-02,large_cap_etf,IVV,equity_etf,us_equity_large,,false,intraday,,300,Nominal price. Fixture instrument. Checked 2026-11-13: ticker and S&P 500 benchmark (third-party comparison pages only).
+INS-03,total_market_etf,VTI,equity_etf,us_equity_total,,false,intraday,,100,"Nominal price. Fixture instrument. Checked 2026-11-13: ticker, total US market (third-party comparison pages only)."
+INS-04,dividend_equity_etf,SCHD,equity_etf,us_equity_dividend,,false,intraday,,80,Nominal price. Checked 2026-11-13: tracks Dow Jones U.S. Dividend 100 Index (third-party pages only).
+INS-05,growth_mutual_fund,FCNTX,mutual_fund,us_equity_growth,,true,end_of_day_nav,VUG,100,"Nominal price. Fixture instrument. Checked 2026-11-13: ticker; Morningstar Large Growth; prospectus benchmark S&P 500. Proxy VUG is our judgement, not sourced."
+INS-06,growth_mutual_fund,AGTHX,mutual_fund,us_equity_growth,,true,end_of_day_nav,VUG,100,"Nominal price. Fixture instrument. Checked 2026-11-13: Class A ticker (Capital Group); Large Growth; prospectus benchmark S&P 500. Proxy VUG is our judgement, not sourced."
+INS-07,large_blend_mutual_fund,VFIAX,mutual_fund,us_equity_large,,true,end_of_day_nav,SPY,250,"Nominal price. Checked 2026-11-13: tracks S&P 500 (Vanguard, Morningstar); proxy SPY."
+INS-08,intermediate_bond_etf,BND,bond_fund,us_bond_intermediate,5.8,false,intraday,,50,"Checked 2026-11-13: average duration 5.8 yrs (Vanguard fact sheet, 2026-06-30). Fixture instrument (duration case)."
+INS-09,intermediate_bond_mutual_fund,VBTLX,bond_fund,us_bond_intermediate,5.8,true,end_of_day_nav,BND,10,"Nominal price. Checked 2026-11-13: same index as BND; Vanguard average duration 5.9 (2025-06-30), effective 5.68-5.80 (Morningstar, Schwab, YCharts)."
+INS-10,short_term_bond_etf,BSV,bond_fund,us_bond_short,2.6,false,intraday,,80,"Checked 2026-11-13: average duration 2.6 yrs (Vanguard fact sheet, 2025-12-31). Stand-in for SCF CDs."
+INS-11,short_term_bond_mutual_fund,VBIRX,bond_fund,us_bond_short,2.6,true,end_of_day_nav,BSV,10,Checked 2026-11-13: average duration 2.6 (Vanguard profile 2025-04-30; YCharts effective 2.60 on 2026-02-28). Stand-in for SCF CDs.
+INS-12,muni_bond_mutual_fund,VWIUX,bond_fund,us_bond_muni,5.8,true,end_of_day_nav,MUB,10,"Checked 2026-11-13: effective duration 5.80 (YCharts, same fund as VWITX, 2025-12-31); modified 5.75 (Zacks). Proxy MUB not sourced. SCF tax-free bond funds (TFBMUTF)."
+INS-13,treasury_bond_etf,GOVT,bond_fund,us_bond_treasury,5.5,false,intraday,,25,"Checked 2026-11-13: effective duration 5.54 yrs (iShares, 2026-11-09). SCF direct bonds (BOND)."
+INS-14,target_date_2030,VTHRX,target_date_fund,multi_asset,,true,end_of_day_nav,,25,Checked 2026-11-13: ticker (Investor shares). No single-ETF proxy.
+INS-15,target_date_2040,VFORX,target_date_fund,multi_asset,,true,end_of_day_nav,,40,Checked 2026-11-13: ticker (Investor shares). No single-ETF proxy.
+INS-16,target_date_2050,VFIFX,target_date_fund,multi_asset,,true,end_of_day_nav,,50,Checked 2026-11-13: ticker (Investor shares). No single-ETF proxy.
+INS-17,target_date_income,VTINX,target_date_fund,multi_asset,,true,end_of_day_nav,,15,Checked 2026-11-13: ticker (Investor shares); about 30/70 stock/bond (third-party). No single-ETF proxy.
+INS-18,money_market_fund,VMFXX,money_market_fund,cash,0.1,true,end_of_day_nav,,1,"Checked 2026-11-13: stable $1 NAV; weighted average maturity capped at 60 days, 32 days on 2025-07-31 (Vanguard), so duration 0.1 is a rounding. Holds SCF liquid assets (LIQ). Assumption: LIQ is visible to the advisor."
+INS-19,options_income_etf,JEPI,options_etf,equity_options_income,,false,intraday,,55,Checked 2026-11-13: ticker; covered-call overlay via equity-linked notes. Not in SCF; our assumption.
+INS-20,leveraged_etf_2x,SSO,leveraged_etf,equity_leveraged,,false,intraday,,60,"Checked 2026-11-13: ProShares, 2x daily S&P 500, resets daily. Not in SCF; our assumption."
+INS-21,leveraged_etf_3x,TQQQ,leveraged_etf,equity_leveraged,,false,intraday,,70,"Checked 2026-11-13: ProShares, 3x daily Nasdaq-100, resets daily. Not in SCF; our assumption."
