@@ -4,6 +4,9 @@ All prices are synthetic. FRED-mode tests use the made-up yield files in tests/f
 never the real downloads.
 """
 
+import ast
+import filecmp
+import sys
 from datetime import date, datetime
 from pathlib import Path
 
@@ -23,7 +26,7 @@ from advisor_qa.world.market_calendar import (
 )
 from advisor_qa.world.price_model import DailyModel, simulate_daily
 from advisor_qa.world.price_params import PriceParams, load_price_config
-from advisor_qa.world.prices import PriceWorld, build_prices
+from advisor_qa.world.prices import PriceWorld, build_prices, main, read_price_table
 from advisor_qa.world.yields import FRED, SIMULATED, carry_forward, read_fred_series
 from tests.unit.test_fixture_household import DAY_MOVES
 
@@ -371,3 +374,147 @@ def test_fixture_close_is_simulated_and_others_follow(world: PriceWorld) -> None
     np.testing.assert_allclose(sso / sso[0] - 1, 2 * (spy / spy[0] - 1), atol=1e-6)
     # the close is drawn, not scripted
     assert world.closes["INS-01"][i] / 450 - 1 != pytest.approx(-0.021, abs=1e-6)
+
+
+# --- CSV writer, CLI and determinism (test 1) ---------------------------------------------------
+
+FILES = ["calendar.csv", "prices_daily.csv", "prices_published.csv", "prices_latent.csv"]
+COLUMNS = {
+    "calendar.csv": ["market_date", "regime", "split", "is_fixture_day"],
+    "prices_daily.csv": [
+        "instrument_id", "market_date", "prior_close", "close", "price_type", "close_as_of",
+    ],
+    "prices_published.csv": ["instrument_id", "market_date", "time", "price", "price_as_of"],
+    "prices_latent.csv": ["instrument_id", "market_date", "time", "value"],
+    "events.csv": ["instrument_id", "market_date", "type", "ratio"],
+}  # fmt: skip
+
+
+def _run_cli(monkeypatch: pytest.MonkeyPatch, out: Path, *extra: str) -> None:
+    monkeypatch.setattr(sys, "argv", ["prices", "--out", str(out), *extra])
+    main()
+
+
+@pytest.mark.parametrize("extra", [(), ("--fred-dir", str(FAKE_FRED))], ids=["simulated", "fred"])
+def test_same_seed_gives_byte_identical_csvs(
+    extra: tuple[str, ...], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _run_cli(monkeypatch, tmp_path / "a", *extra)
+    _run_cli(monkeypatch, tmp_path / "b", *extra)
+    names = [*FILES, "events.csv", "README.md"]
+    match, mismatch, errors = filecmp.cmpfiles(tmp_path / "a", tmp_path / "b", names, shallow=False)
+    assert match == names and not mismatch and not errors
+
+
+def test_different_seed_gives_different_prices(
+    cfg: tuple[int, PriceParams], world: PriceWorld
+) -> None:
+    seed, p = cfg
+    other = build_prices(load_instruments(), p, seed + 1)
+    assert not np.array_equal(other.paths["INS-04"], world.paths["INS-04"], equal_nan=True)
+
+
+def test_csv_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, world: PriceWorld) -> None:
+    _run_cli(monkeypatch, tmp_path)
+    for name, cols in COLUMNS.items():
+        first = (tmp_path / name).read_text(encoding="utf-8").splitlines()[0]
+        assert first.startswith("# SYNTHETIC PRICES"), name
+        assert list(read_price_table(tmp_path / name).columns) == cols, name
+    assert "ALL PRICES IN THIS FOLDER ARE SYNTHETIC" in (tmp_path / "README.md").read_text()
+    pub = read_price_table(tmp_path / "prices_published.csv").set_index(["instrument_id", "time"])
+    lat = read_price_table(tmp_path / "prices_latent.csv").set_index(["instrument_id", "time"])
+    daily = read_price_table(tmp_path / "prices_daily.csv")
+    assert len(pub) == len(lat) == 23 * 180 * 79 and len(daily) == 23 * 180
+    key = ("INS-05", "2026-03-10T14:05:00")
+    assert pub.loc[key, "price"] == 100.0 and pub.loc[key, "price_as_of"] == "2026-03-09T16:00:00"
+    assert lat.loc[key, "value"] == world.latent_value(*key) == 98.5
+    etf = ("INS-01", "2026-03-10T14:05:00")
+    assert pub.loc[etf, "price"] == lat.loc[etf, "value"] == 440.55
+    assert pub.loc[etf, "price_as_of"] == "2026-03-10T14:05:00"
+    funds = set(load_instruments().query("is_mutual_fund")["instrument_id"])
+    assert set(daily.loc[daily["price_type"] == "nav", "instrument_id"]) == funds
+
+
+# --- Separation (test 10) -----------------------------------------------------------------------
+
+SRC = Path(__file__).resolve().parents[2] / "src" / "advisor_qa"
+GUARDED_PARTS = {"checks", "scoring"}  # advisor_qa.checks, the scoring code, wherever it lives
+LATENT_MODULE = "advisor_qa.world.latent"
+LATENT_NAMES = {"latent_value", "latent_frame", "LATENT_FILE", "LATENT_COLUMNS"}
+
+
+def latent_uses(source: str) -> list[str]:
+    """Every way a module reaches the latent prices: importing the latent module, naming
+    latent_value (or the latent writer), or the latent file name / module path as a string."""
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            found += [a.name for a in node.names if a.name.startswith(LATENT_MODULE)]
+        elif isinstance(node, ast.ImportFrom):
+            mod = node.module or ""
+            if mod.startswith(LATENT_MODULE) or mod.split(".")[-1] == "latent":
+                found.append(mod)
+            found += [a.name for a in node.names if a.name in LATENT_NAMES | {"latent"}]
+        elif isinstance(node, ast.Name) and node.id in LATENT_NAMES:
+            found.append(node.id)
+        elif isinstance(node, ast.Attribute) and node.attr in LATENT_NAMES:
+            found.append(node.attr)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if "prices_latent" in node.value or LATENT_MODULE in node.value:
+                found.append(node.value)
+    return found
+
+
+def guarded_files() -> list[Path]:
+    return sorted(
+        f
+        for f in SRC.rglob("*.py")
+        if GUARDED_PARTS & ({*f.relative_to(SRC).parts[:-1]} | {f.stem})
+    )
+
+
+def test_checks_and_scoring_never_use_latent_prices() -> None:
+    for f in guarded_files():
+        assert latent_uses(f.read_text(encoding="utf-8")) == [], f
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import advisor_qa.world.latent",
+        "from advisor_qa.world.latent import latent_frame",
+        "from advisor_qa.world import latent",
+        "from ..world import latent",
+        "v = world.latent_value('INS-05', ts)",
+        "df = pd.read_csv('data/synthetic/prices/prices_latent.csv')",
+        "importlib.import_module('advisor_qa.world.latent')",
+    ],
+)
+def test_separation_detector_catches_latent_use(source: str) -> None:
+    assert latent_uses(source)
+
+
+def test_separation_detector_allows_published_prices() -> None:
+    ok = "from advisor_qa.world.prices import read_price_table\nx = w.published_price('INS-05', t)"
+    assert latent_uses(ok) == []
+
+
+def test_guarded_files_include_future_checks_and_scoring_packages() -> None:
+    def guarded(rel: str) -> bool:
+        f = SRC / rel
+        return bool(GUARDED_PARTS & ({*f.relative_to(SRC).parts[:-1]} | {f.stem}))
+
+    assert guarded("checks/d1.py") and guarded("scoring/weighted.py") and guarded("eval/scoring.py")
+    assert not guarded("truth/impact.py") and not guarded("inject/d1.py")
+
+
+def test_published_price_never_returns_latent_for_funds(world: PriceWorld) -> None:
+    for s in world.series:
+        if not s.is_mutual_fund or s.ticker == "VMFXX":
+            continue
+        for d in world.calendar.days:
+            for t in world.times[1:]:
+                ts = f"{d}T{t}:00"
+                latent = world.latent_value(s.series_id, ts)
+                if latent != world.prior_close(s.series_id, d):
+                    assert world.published_price(s.series_id, ts)[0] != latent
