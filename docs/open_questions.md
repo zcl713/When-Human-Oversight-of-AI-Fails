@@ -3,9 +3,6 @@
 Resolved items move to `decisions.md`. The owner is who needs the answer to proceed (see `roadmap.md`).
 
 ## Blocks dataset work
-- **Prices** (A): real market data or fully synthetic returns? Mutual funds need one NAV per day;
-  ETFs need intraday prices; D1 (stale NAV) depends on this split. The household layer is
-  price-free by design and does not wait on this.
 - **Trace and label storage format** (A, B): Parquet fails on a machine with a Windows application
   control policy (see README). The household layer writes CSV. Traces are nested, so JSONL is likely.
 - **Number of households, trading days, questions per day** (A, B): recommended values are in

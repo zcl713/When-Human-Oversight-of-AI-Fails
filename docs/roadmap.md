@@ -10,8 +10,8 @@ questions are in `open_questions.md`.
 | Trace schema (39 fields, 7 groups) and hidden `RunLabel` | `src/advisor_qa/schema/` | Done |
 | Test catalogue (30 failure modes D/C/I/O/S, scores) | `data/reference/test_catalogue.csv` | Scores done. `mapped_mutation` and `mapped_check` are empty. |
 | Households, accounts, holdings, instruments | `src/advisor_qa/world/`, `data/reference/instruments.csv` | **Done** (SCF sampler, fixture HH-004217, checks, build command) |
-| Calendar, market days, prices | `src/advisor_qa/world/` | Not started. Real vs synthetic prices is undecided. |
-| Date split (train / validation / test) | `config/default.yaml` has fractions only | Not started |
+| Calendar, market days, prices | `src/advisor_qa/world/prices.py`, `config/default.yaml` (`prices:`) | **Done** (synthetic prices, 180 trading days, fixture day pinned; spec in `price_simulator_spec.md`) |
+| Date split (train / validation / test) | `calendar.csv` from the price layer | Dates done (contiguous blocks, test last, each with at least 5 stress days). Household split not started. |
 | Ground-truth portfolio impact | `src/advisor_qa/truth/` | Empty |
 | Questions, mock tools, correct agent, clean traces | `src/advisor_qa/pipeline/` | Empty |
 | Error injection and hidden labels | `src/advisor_qa/inject/` | Empty |
@@ -27,6 +27,17 @@ each has a `proxy_ticker` for an intraday estimate. Prices are **not** in this l
 `reference_price` is a nominal number used only to turn dollars into share counts.
 The fixture household HH-004217 is always included (known true impact -$21,700, -1.8%).
 It needs the SCF file; see `data/README.md`.
+
+## What the price layer gives you
+`uv run python -m advisor_qa.world.prices --out data/synthetic/prices [--fred-dir data/raw/fred]`
+writes `calendar.csv`, `prices_daily.csv`, `prices_published.csv`, `prices_latent.csv` (and an empty
+`events.csv` hook for D4). **All prices are synthetic.** Every CSV starts with a `#` notice line, so
+read them with `comment="#"` (`advisor_qa.world.prices.read_price_table`). In Python,
+`build_prices(...)` returns a `PriceWorld` with `published_price`, `latent_value` and `prior_close`.
+Mutual funds publish the previous day's NAV all day (the D1 setup); `latent_value` and
+`prices_latent.csv` are for the truth function and injectors only, never checks or scoring (a test
+enforces it). Without `--fred-dir` the bond yields are simulated. On the fixture day at 14:05 the
+latent values give HH-004217 a true impact of exactly -$21,700.
 
 ## Agree these three interfaces first
 1. **Price table**: `instrument_id`, date (and time for intraday), price. Mutual funds have one NAV per day.
