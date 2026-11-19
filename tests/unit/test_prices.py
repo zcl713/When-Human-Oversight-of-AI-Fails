@@ -7,8 +7,10 @@ never the real downloads.
 from datetime import date
 
 import numpy as np
+import pandas as pd
 import pytest
 
+from advisor_qa.world.instruments import load_instruments
 from advisor_qa.world.market_calendar import (
     STRESS,
     TEST,
@@ -17,7 +19,10 @@ from advisor_qa.world.market_calendar import (
     assign_split,
     build_calendar,
 )
+from advisor_qa.world.price_model import DailyModel, simulate_daily
 from advisor_qa.world.price_params import PriceParams, load_price_config
+
+ETF_TYPES = {"equity_etf", "options_etf", "leveraged_etf"}
 
 
 @pytest.fixture(scope="module")
@@ -71,3 +76,54 @@ def test_regime_path_is_seeded(cfg: tuple[int, PriceParams]) -> None:
     seed, p = cfg
     a, b = build_calendar(p, seed), build_calendar(p, seed)
     assert np.array_equal(a.stress, b.stress) and a.regime_seed == b.regime_seed
+
+
+# --- Market factor, ETFs and leveraged ETFs (tests 6, 8, 9) -----------------------------------
+
+
+@pytest.fixture(scope="module")
+def equity_daily(cfg: tuple[int, PriceParams]) -> tuple[pd.DataFrame, DailyModel]:
+    seed, p = cfg
+    inst = load_instruments()
+    inst = inst[inst["instrument_type"].isin(ETF_TYPES)]
+    return inst, simulate_daily(inst, p, seed, build_calendar(p, seed))
+
+
+def _ids(inst: pd.DataFrame) -> dict[str, str]:
+    return dict(zip(inst["ticker"], inst["instrument_id"], strict=True))
+
+
+def test_leverage_is_exact_daily_multiple(equity_daily: tuple[pd.DataFrame, DailyModel]) -> None:
+    inst, m = equity_daily
+    ids = _ids(inst)
+    spy, sso, tqqq = (m.returns[ids[t]][1:] for t in ("SPY", "SSO", "TQQQ"))
+    tech = 1.2 * m.components["market"][1:] + m.components["tech"][1:]
+    np.testing.assert_allclose(sso, 2 * spy, rtol=0, atol=1e-12)
+    np.testing.assert_allclose(tqqq, 3 * tech, rtol=0, atol=1e-12)
+
+
+def test_stress_to_calm_vol_ratio(
+    cfg: tuple[int, PriceParams], equity_daily: tuple[pd.DataFrame, DailyModel]
+) -> None:
+    seed, p = cfg
+    stress = build_calendar(p, seed).stress[1:]
+    spy = equity_daily[1].returns[_ids(equity_daily[0])["SPY"]][1:]
+    ratio = spy[stress].std(ddof=1) / spy[~stress].std(ddof=1)
+    assert 2 <= ratio <= 4.5
+
+
+def test_daily_moves_are_sane(equity_daily: tuple[pd.DataFrame, DailyModel]) -> None:
+    inst, m = equity_daily
+    for _, r in inst.iterrows():
+        bound = 0.40 if r["instrument_type"] == "leveraged_etf" else 0.15
+        assert np.abs(m.returns[r["instrument_id"]][1:]).max() < bound, r["ticker"]
+
+
+def test_adding_an_instrument_does_not_change_the_others(
+    cfg: tuple[int, PriceParams], equity_daily: tuple[pd.DataFrame, DailyModel]
+) -> None:
+    seed, p = cfg
+    inst, m = equity_daily
+    fewer = simulate_daily(inst[inst["ticker"] != "SCHD"], p, seed, build_calendar(p, seed))
+    for sid, r in fewer.returns.items():
+        assert np.array_equal(r, m.returns[sid])
