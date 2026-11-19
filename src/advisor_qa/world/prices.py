@@ -22,7 +22,7 @@ import pandas as pd
 
 from advisor_qa.world.intraday import ComponentPaths, grid_times
 from advisor_qa.world.market_calendar import Calendar, build_calendar
-from advisor_qa.world.price_model import Series, simulate_daily
+from advisor_qa.world.price_model import MARKET, ModelSpec, Series, idio, simulate_daily
 from advisor_qa.world.price_params import PriceParams
 
 DECIMALS = 6  # prices are rounded once, so CSVs and PriceWorld hold identical numbers
@@ -117,6 +117,35 @@ def _anchor(x: np.ndarray, anchor_index: int, reference_price: float) -> tuple[n
     return np.round(close * k, DECIMALS), np.round(path * k, DECIMALS)
 
 
+def pin_fixture(comps: ComponentPaths, spec: ModelSpec, cfg: PriceParams, cal: Calendar) -> None:
+    """Script the latent moves at the fixture time (spec section 4). The market factor is pinned
+    for the market series; every other pinned series is pinned through its own idio bridge, so
+    its path passes exactly through the scripted value. The day's closes are still simulated
+    (the second bridge runs from the pinned value to the drawn close)."""
+    k = grid_times(cfg).index(cfg.fixture_query_time)
+    di = cal.all_days.index(cfg.fixture_date)
+    by_id = {s.series_id: s for s in spec.series}
+    unknown = set(cfg.fixture_moves) - set(by_id)
+    if unknown:
+        raise ValueError(f"fixture_moves names unknown instruments {sorted(unknown)}")
+    rest_pins: dict[str, float] = {}
+    for sid, move in cfg.fixture_moves.items():
+        if by_id[sid].loadings == {MARKET: 1.0}:
+            comps.pin(MARKET, di, {k: move})
+        else:
+            rest_pins[sid] = move
+    pinned_idio = {idio(sid) for sid in rest_pins}
+    for sid, move in rest_pins.items():
+        loadings, own = by_id[sid].loadings, idio(sid)
+        if own not in loadings:
+            raise ValueError(f"{sid} cannot be pinned: it has no idio term of its own")
+        others = {c: w for c, w in loadings.items() if c != own}
+        if set(others) & pinned_idio:
+            raise ValueError(f"{sid} loads on another pinned series' idio term")
+        rest = sum(w * float(comps.paths[c][di, k]) for c, w in others.items())
+        comps.pin(own, di, {k: (move - rest) / loadings[own]})
+
+
 def build_prices(
     instruments: pd.DataFrame, cfg: PriceParams, seed: int, fred_dir: Path | None = None
 ) -> PriceWorld:
@@ -124,6 +153,7 @@ def build_prices(
     cal = build_calendar(cfg, seed)
     daily = simulate_daily(instruments, cfg, seed, cal, fred_dir)
     comps = ComponentPaths(daily, cfg, seed, cal)
+    pin_fixture(comps, daily.spec, cfg, cal)
     anchor_index = cal.all_days.index(cfg.anchor_date)
     closes: dict[str, np.ndarray] = {}
     paths: dict[str, np.ndarray] = {}

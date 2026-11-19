@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from advisor_qa.world import fixture as fx
 from advisor_qa.world.instruments import load_instruments
 from advisor_qa.world.market_calendar import (
     STRESS,
@@ -24,6 +25,7 @@ from advisor_qa.world.price_model import DailyModel, simulate_daily
 from advisor_qa.world.price_params import PriceParams, load_price_config
 from advisor_qa.world.prices import PriceWorld, build_prices
 from advisor_qa.world.yields import FRED, SIMULATED, carry_forward, read_fred_series
+from tests.unit.test_fixture_household import DAY_MOVES
 
 ETF_TYPES = {"equity_etf", "options_etf", "leveraged_etf"}
 FAKE_FRED = Path(__file__).parent.parent / "fixtures" / "fred"  # made-up yields, not FRED data
@@ -322,3 +324,50 @@ def test_anchoring_keeps_model_returns(cfg: tuple[int, PriceParams], world: Pric
     for s in world.series:
         c = world.closes[s.series_id]
         np.testing.assert_allclose(c[1:] / c[:-1] - 1, m.returns[s.series_id][1:], atol=1e-7)
+
+
+# --- Fixture day (test 2) -----------------------------------------------------------------------
+
+FIXTURE_TS = "2026-03-10T14:05:00"
+
+
+def fixture_impact(w: PriceWorld) -> float:
+    """Sum of qty x (latent value at 14:05 - prior close) over HH-004217's holdings."""
+    return sum(
+        qty * (w.latent_value(ins, FIXTURE_TS) - w.prior_close(ins, "2026-03-10"))
+        for _, ins, qty in fx.FIXTURE_HOLDINGS
+    )
+
+
+def test_fixture_moves_match_household_test(cfg: tuple[int, PriceParams]) -> None:
+    assert cfg[1].fixture_moves == DAY_MOVES
+
+
+@pytest.mark.parametrize("which", ["world", "world_fred"])
+def test_fixture_true_impact(which: str, request: pytest.FixtureRequest) -> None:
+    w: PriceWorld = request.getfixturevalue(which)
+    impact = fixture_impact(w)
+    assert impact == pytest.approx(-21_700, abs=0.01)
+    assert impact / 1_200_000 == pytest.approx(-0.018, abs=0.0001)
+    ref = load_instruments().set_index("instrument_id")["reference_price"]
+    for ins, move in DAY_MOVES.items():
+        assert w.prior_close(ins, "2026-03-10") == ref[ins]
+        assert w.latent_value(ins, FIXTURE_TS) == pytest.approx(ref[ins] * (1 + move), abs=1e-6)
+
+
+def test_fixture_day_is_d1_setup(world: PriceWorld) -> None:
+    """Funds publish the 2026-03-09 NAV on the fixture day while the latent value has moved."""
+    for ins in ("INS-05", "INS-06"):
+        price, as_of = world.published_price(ins, FIXTURE_TS)
+        assert price == 100.0 and as_of == datetime(2026, 3, 9, 16, 0)
+        assert world.latent_value(ins, FIXTURE_TS) != price
+
+
+def test_fixture_close_is_simulated_and_others_follow(world: PriceWorld) -> None:
+    i = world.calendar.all_days.index(date(2026, 3, 10))
+    spy = world.paths["INS-01"][i]
+    sso = world.paths["INS-20"][i]
+    # SSO is not pinned but follows the pinned market factor: 2x SPY's move so far
+    np.testing.assert_allclose(sso / sso[0] - 1, 2 * (spy / spy[0] - 1), atol=1e-6)
+    # the close is drawn, not scripted
+    assert world.closes["INS-01"][i] / 450 - 1 != pytest.approx(-0.021, abs=1e-6)
