@@ -5,6 +5,7 @@ never the real downloads.
 """
 
 from datetime import date
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -21,8 +22,10 @@ from advisor_qa.world.market_calendar import (
 )
 from advisor_qa.world.price_model import DailyModel, simulate_daily
 from advisor_qa.world.price_params import PriceParams, load_price_config
+from advisor_qa.world.yields import FRED, SIMULATED, carry_forward, read_fred_series
 
 ETF_TYPES = {"equity_etf", "options_etf", "leveraged_etf"}
+FAKE_FRED = Path(__file__).parent.parent / "fixtures" / "fred"  # made-up yields, not FRED data
 
 
 @pytest.fixture(scope="module")
@@ -127,3 +130,58 @@ def test_adding_an_instrument_does_not_change_the_others(
     fewer = simulate_daily(inst[inst["ticker"] != "SCHD"], p, seed, build_calendar(p, seed))
     for sid, r in fewer.returns.items():
         assert np.array_equal(r, m.returns[sid])
+
+
+# --- Bonds and yields (test 7) ------------------------------------------------------------------
+
+
+def _etfs(cfg: tuple[int, PriceParams], fred_dir: Path | None) -> tuple[pd.DataFrame, DailyModel]:
+    seed, p = cfg
+    inst = load_instruments()
+    inst = inst[~inst["is_mutual_fund"]]
+    return inst, simulate_daily(inst, p, seed, build_calendar(p, seed), fred_dir)
+
+
+def test_fred_loader_carries_blank_and_dot_forward() -> None:
+    for name in ("DGS2.csv", "DGS10.csv"):
+        s = read_fred_series(FAKE_FRED / name)
+        gaps = s[s.isna()]
+        assert len(gaps) == 5
+        days = list(s.index)
+        filled = carry_forward(s, days, name)
+        for d in gaps.index:
+            i = days.index(d)
+            assert filled[i] == filled[i - 1] and not np.isnan(filled[i])
+
+
+def test_fred_loader_rejects_window_before_first_observation() -> None:
+    s = read_fred_series(FAKE_FRED / "DGS10.csv")
+    with pytest.raises(ValueError, match="no observation"):
+        carry_forward(s, [date(2025, 1, 2)], "DGS10.csv")
+
+
+def test_bond_tracks_ten_year_yield_with_fred(cfg: tuple[int, PriceParams]) -> None:
+    inst, m = _etfs(cfg, FAKE_FRED)
+    assert m.yields.source == FRED
+    ids = _ids(inst)
+    dy10 = m.yields.change("10y")[1:]
+    bnd = m.returns[ids["BND"]][1:]
+    assert np.corrcoef(bnd, -dy10)[0, 1] >= 0.9
+    # changes are divided by 100: a 10 bp move is about -0.58% on BND before carry and idio
+    assert np.abs(dy10).max() < 0.01
+    bsv = m.returns[ids["BSV"]][1:]
+    assert np.corrcoef(bsv, -m.yields.change("2y")[1:])[0, 1] >= 0.8  # shorter duration
+
+
+def test_simulated_yields_without_fred(cfg: tuple[int, PriceParams]) -> None:
+    inst, m = _etfs(cfg, None)
+    assert m.yields.source == SIMULATED
+    bnd = m.returns[_ids(inst)["BND"]][1:]
+    assert np.isfinite(bnd).all() and bnd.std() > 0
+    # flight to quality: bond returns are negatively correlated with the market
+    assert np.corrcoef(bnd, m.components["market"][1:])[0, 1] < 0
+
+
+def test_missing_fred_file_is_an_error(cfg: tuple[int, PriceParams], tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        _etfs(cfg, tmp_path)
