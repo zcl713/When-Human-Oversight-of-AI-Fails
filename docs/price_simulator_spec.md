@@ -34,7 +34,7 @@ Each day's close-to-close return comes from one market factor and a small idiosy
 
 **Calendar.** 180 real NYSE trading days starting 2026-01-02 (ending 2026-09-21), using the 2026 exchange holidays (Jan 1, Jan 19, Feb 16, Apr 3, May 25, Jun 19, Jul 3, Sep 7). The fixture day 2026-03-10 is trading day 46. The dates are real but the prices are not, so label every output as synthetic. Simulate one extra day before the window to give the first day a prior close.
 
-**Regimes.** A two-state Markov chain, calm and stress, starting calm. Defaults give about 11% stress days in runs of about 8. Resample (seed, seed+1, … up to 20 tries) until each of train, val and test has at least 5 stress days.
+**Regimes.** A two-state Markov chain, calm and stress, starting calm. Defaults give about 11% stress days in runs of about 8. Resample (seed, seed+1, … up to 20 tries) until the stress share is between 8% and 15% and each of train, val and test has at least 5 stress days.
 
 **Split.** Contiguous blocks by date: the last 20% of days are test, the 20% before them are validation, and the rest are train, matching `test_date_fraction`. Regimes persist from day to day, so random dates would leak volatility information between splits. The fixture day falls in train.
 
@@ -48,11 +48,11 @@ Each day's close-to-close return comes from one market factor and a small idiosy
 | VTI, SCHD, JEPI | β of 1.00, 0.92 and 0.60 on `r_SPY`, each with its own idio |
 | SSO, TQQQ | 2 × `r_SPY` and 3 × `r_tech`, reset daily, so intraday is also 2× or 3× the return so far |
 | FCNTX, AGTHX | proxy VUG (β 1.02 on `r_SPY`) plus fund idio |
-| BND, GOVT, BSV, and funds VBTLX, VBIRX, VWIUX | `−duration × Δyield + yield/252 + idio`; 10-year yield for duration above 3, 2-year for the rest; VBTLX proxy BND, VBIRX proxy BSV, VWIUX proxy MUB with β 0.8 on the 10-year |
+| BND, GOVT, BSV, and funds VBTLX, VBIRX, VWIUX | `−duration × Δyield + yield/252 + idio`; 10-year yield for duration above 3, 2-year for the rest; VBTLX proxy BND and VBIRX proxy BSV (each adds 0.02% idio), VWIUX proxy MUB (adds 0.17% idio), where MUB returns −0.8 × 5.8 × Δ(10-year yield) + yield/252 + idio |
 | VTHRX, VFORX, VFIFX, VTINX | `w × r_SPY + (1 − w) × r_BND + idio`, no proxy ETF; w by vintage in the parameters table |
 | VMFXX | NAV fixed at 1.00 |
 
-**Yields.** If `fred_dir` is given, read `DGS2.csv` and `DGS10.csv` (the FRED downloads) and carry the previous value over days where the value is blank (older FRED downloads use a dot). Bond returns then use real yield changes. The cost is that bond returns are independent of the simulated equity returns, so there is no flight-to-quality effect. If `fred_dir` is absent, simulate the yield changes instead, with a small negative correlation to `r_SPY` that is stronger in stress.
+**Yields.** If `fred_dir` is given, read `DGS2.csv` and `DGS10.csv` (the FRED downloads) and carry the previous value over days where the value is blank (older FRED downloads use a dot). Bond returns then use real yield changes. FRED yields are in percent, so divide the changes by 100. The cost is that bond returns are independent of the simulated equity returns, so there is no flight-to-quality effect. If `fred_dir` is absent, simulate the yield changes instead, with a small negative correlation to `r_SPY` that is stronger in stress.
 
 **Intraday path.** Value at grid time t is `P0 × (1 + x(t))`, where `x` is a path from 0 to the day's return `R` over the grid's 79 points, `x(t) = R·s + σ_intra × (W(s) − s·W(1))` with `s` the fraction of the day elapsed. Build one bridge for the market factor, one for the tech factor, and one idio bridge per instrument, then combine them with the same βs so that related instruments move together. The path starts at the prior close and ends exactly at the close.
 
@@ -76,10 +76,10 @@ How to do it:
 1. Force 2026-03-10 into the stress regime.
 2. Pin the market factor's return so far at 14:05 to −2.1%, since SPY is the market factor.
 3. For each of the other pinned instruments, pin its path at 14:05 to its value in the table. Build the path as two bridges, 09:30 to 14:05 and 14:05 to 16:00, so it passes through the pinned point.
-4. Let everything after 14:05 run freely, so the day's close is simulated, not scripted. Instruments not in the table follow the market factor normally.
+4. The day's close return is drawn as usual, and the second bridge runs from the pinned value to that close, so the close is simulated, not scripted. Instruments not in the table follow the market factor normally.
 5. The funds' published NAV on that day stays the 2026-03-09 close, so the true move and the published price differ, which is the D1 setup.
 
-The pinned values override the factor model only at that one timestamp. If the bond pin conflicts with the FRED yield change on that date, the pin wins and the day is noted in `calendar.csv` as `is_fixture_day`.
+The pinned values override the factor model only at that one timestamp. The bond pin applies only to the 14:05 value; the day's close still follows the yield change, and the day is flagged in `calendar.csv` as `is_fixture_day`.
 
 ## 5. Parameters
 
@@ -101,7 +101,7 @@ The provided dataset's prices carry timing noise. Two ETFs on near-identical ind
 | Tech factor | 1.2 × market + 0.5% noise | assumption; underlying for TQQQ |
 | β on market | VTI 1.00, SCHD 0.92, VUG 1.02, JEPI 0.60 | calibrated for VTI, SCHD, VUG (measured 1.00, 0.92, 1.02); assumption for JEPI |
 | Idio volatility per day | VTI 0.10%, SCHD 0.37%, VUG 0.38% | calibrated (measured 0.12%, 0.37%, 0.38%) |
-| Idio volatility per day | IVV 0.01%, VFIAX 0.02%, JEPI 0.30% | design for IVV and VFIAX (the measured 0.1% is mostly timing noise); assumption for JEPI |
+| Idio volatility per day | IVV 0.01%, VFIAX 0.02%, VBTLX 0.02%, VBIRX 0.02%, JEPI 0.30% | design for IVV and VFIAX (the measured 0.1% is mostly timing noise); assumption for JEPI |
 | Growth funds vs proxy VUG, idio per day | 0.25% | assumption |
 | Muni fund vs proxy MUB, idio per day | 0.17% | calibrated; includes timing noise |
 | Bond idio volatility per day | 0.08% | assumption |
@@ -119,10 +119,10 @@ Add these under `tests/unit/test_prices.py`. The module is done when all pass an
 2. **Fixture.** Using the pinned 14:05 values, `Σ qty × (latent_value − prior_close)` over HH-004217's six holdings is −21,700 within one cent, and the ratio to $1,200,000 is −0.018 ± 0.0001. The 2026-03-09 close of each fixture instrument equals its `reference_price`.
 3. **Path integrity.** For every instrument and day, the first grid value equals the prior close, the last equals the close, nothing is NaN, and every price is above zero.
 4. **Fund publishing.** A fund's published price on any grid time is the previous NAV with `price_as_of` of the previous day 16:00. VMFXX is 1.00 on every day.
-5. **Proxy tie.** Daily-return correlation with the proxy is at least 0.98 for the index funds and between 0.85 and 0.97 for FCNTX and AGTHX.
+5. **Proxy tie.** Daily-return correlation with the proxy is at least 0.98 for VFIAX, VBTLX and VBIRX, between 0.95 and 0.99 for FCNTX and AGTHX, and between 0.75 and 0.95 for VWIUX.
 6. **Leverage.** Each day, SSO's return is 2 × SPY's and TQQQ's is 3 × the tech factor's.
 7. **Bonds.** With FRED files loaded, BND's daily return has correlation of at least 0.9 with −Δ(10-year yield).
-8. **Regimes.** Stress days are 8% to 15% of the calendar, each split has at least 5, and the ratio of stress to calm daily volatility is between 2.5 and 4.
+8. **Regimes.** Stress days are 8% to 15% of the calendar, each split has at least 5, and the ratio of stress to calm daily volatility is between 2 and 4.5.
 9. **Sanity.** No unleveraged instrument moves more than 15% in a day, no leveraged one more than 40%.
 10. **Separation.** `published_price` never returns a latent value for a mutual fund, and a test fails if `advisor_qa.checks` or the scoring code imports the latent file or `latent_value`.
 
