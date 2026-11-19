@@ -185,3 +185,48 @@ def test_simulated_yields_without_fred(cfg: tuple[int, PriceParams]) -> None:
 def test_missing_fred_file_is_an_error(cfg: tuple[int, PriceParams], tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         _etfs(cfg, tmp_path)
+
+
+# --- Mutual funds and proxies (tests 4, 5) ------------------------------------------------------
+
+PROXY_TIE = {  # fund ticker -> (proxy series ticker, min corr, max corr)
+    "VFIAX": ("SPY", 0.98, 1.0),
+    "VBTLX": ("BND", 0.98, 1.0),
+    "VBIRX": ("BSV", 0.98, 1.0),
+    "FCNTX": ("VUG", 0.95, 0.99),
+    "AGTHX": ("VUG", 0.95, 0.99),
+    "VWIUX": ("MUB", 0.75, 0.95),
+}
+
+
+def _all(cfg: tuple[int, PriceParams], fred_dir: Path | None) -> DailyModel:
+    seed, p = cfg
+    return simulate_daily(load_instruments(), p, seed, build_calendar(p, seed), fred_dir)
+
+
+def test_proxy_series_ids() -> None:
+    _, p = load_price_config()
+    ids = [s.series_id for s in _all((0, p), None).spec.series]
+    assert ids[-2:] == ["PROXY-MUB", "PROXY-VUG"]
+    assert ids[:21] == list(load_instruments()["instrument_id"])
+    assert not any(i in ids for i in ("PROXY-SPY", "PROXY-BND", "PROXY-BSV"))
+
+
+@pytest.mark.parametrize("fred_dir", [FAKE_FRED, None], ids=["fred", "simulated"])
+def test_proxy_tie(cfg: tuple[int, PriceParams], fred_dir: Path | None) -> None:
+    m = _all(cfg, fred_dir)
+    by_ticker = {s.ticker: s.series_id for s in m.spec.series}
+    for fund, (proxy, lo, hi) in PROXY_TIE.items():
+        r_fund, r_proxy = m.returns[by_ticker[fund]][1:], m.returns[by_ticker[proxy]][1:]
+        corr = np.corrcoef(r_fund, r_proxy)[0, 1]
+        assert lo <= corr <= hi, (fund, proxy, corr)
+
+
+def test_money_market_and_target_date(cfg: tuple[int, PriceParams]) -> None:
+    m = _all(cfg, None)
+    by_ticker = {s.ticker: s.series_id for s in m.spec.series}
+    assert np.array_equal(m.returns[by_ticker["VMFXX"]], np.zeros(181))
+    spy, bnd = m.returns[by_ticker["SPY"]][1:], m.returns[by_ticker["BND"]][1:]
+    blend = 0.9 * spy + 0.1 * bnd
+    r = m.returns[by_ticker["VFIFX"]][1:]
+    assert np.abs(r - blend).max() < 0.005  # equity weight 0.90 plus a small idio

@@ -7,6 +7,10 @@ Every series' daily return is a fixed linear combination ("loadings") of compone
 - `dy2`, `dy10`: 2- and 10-year yield changes (decimal); `carry2`, `carry10`: yield / 252
 - `idio:<series_id>`: the series' own idiosyncratic term
 
+Mutual funds load on their proxy (an instrument, or a PROXY-<ticker> series that is simulated but
+never held) plus their own idio; target-date funds blend the market and BND; the money-market fund
+has no loadings, so its NAV stays at 1.00.
+
 The intraday paths (step 5) are combined with the same loadings, so related series move together
 and every path ends exactly at its daily return.
 """
@@ -29,6 +33,7 @@ from advisor_qa.world.yields import (
 )
 
 MARKET, TECH = "market", "tech"
+PROXY_PREFIX = "PROXY-"
 DY = {TENOR_2Y: "dy2", TENOR_10Y: "dy10"}
 CARRY = {TENOR_2Y: "carry2", TENOR_10Y: "carry10"}
 
@@ -71,22 +76,42 @@ class _SpecBuilder:
         self.loadings: dict[str, Loadings] = {}
         self.idio_vol: dict[str, float] = {}
         self.idio_share: dict[str, float] = {}
+        self.proxies: list[Series] = []
 
-    def _own_idio(self, series_id: str, ticker: str, bond: bool) -> Loadings:
-        if ticker not in self.p.idio_vol:
-            raise ValueError(f"prices.idio_vol has no entry for {ticker}")
+    def _idio(self, series_id: str, vol: float, bond: bool) -> Loadings:
         name = idio(series_id)
-        self.idio_vol[name] = self.p.idio_vol[ticker]
+        self.idio_vol[name] = vol
         p = self.p
         self.idio_share[name] = p.intraday_share_bond if bond else p.intraday_share_equity
         return {name: 1.0}
 
+    def _own_idio(self, series_id: str, ticker: str, bond: bool) -> Loadings:
+        if ticker not in self.p.idio_vol:
+            raise ValueError(f"prices.idio_vol has no entry for {ticker}")
+        return self._idio(series_id, self.p.idio_vol[ticker], bond)
+
     def for_ticker(self, ticker: str) -> Loadings:
         if ticker not in self.loadings:
-            if ticker not in self.rows:
+            if ticker in self.rows:
+                self.loadings[ticker] = self._instrument(self.rows[ticker])
+            elif ticker in self.p.proxy_series:
+                self.loadings[ticker] = self._proxy(ticker)
+            else:
                 raise ValueError(f"no rule for ticker {ticker}")
-            self.loadings[ticker] = self._instrument(self.rows[ticker])
         return self.loadings[ticker]
+
+    def _proxy(self, ticker: str) -> Loadings:
+        """A proxy that is not in instruments.csv, simulated as PROXY-<ticker>."""
+        ps, sid = self.p.proxy_series[ticker], PROXY_PREFIX + ticker
+        if ps.kind == "equity":
+            own = self._idio(sid, ps.idio_vol, False)
+            out = _combine((ps.beta, {MARKET: 1.0}), (1.0, own))
+        else:
+            own = self._idio(sid, ps.idio_vol, True)
+            out = _combine((1.0, self.rates(ps.duration, ps.rate_sensitivity)), (1.0, own))
+        p = self.p
+        self.proxies.append(Series(sid, ticker, False, False, p.proxy_reference_price, out))
+        return out
 
     def _instrument(self, r: pd.Series) -> Loadings:
         p, ticker, sid = self.p, str(r["ticker"]), str(r["instrument_id"])
@@ -96,6 +121,19 @@ class _SpecBuilder:
             lev = p.leverage[ticker]
             under = {MARKET: 1.0} if lev.underlying == "market" else self.tech()
             return _combine((lev.multiple, under))
+        if r["instrument_type"] == "money_market_fund":
+            return {}
+        if r["instrument_type"] == "target_date_fund":
+            if ticker not in p.target_date_equity_weight:
+                raise ValueError(f"prices.target_date_equity_weight has no entry for {ticker}")
+            w = p.target_date_equity_weight[ticker]
+            bond = self.for_ticker(p.target_date_bond_ticker)
+            own = self._own_idio(sid, ticker, False)
+            return _combine((w, {MARKET: 1.0}), (1 - w, bond), (1.0, own))
+        if bool(r["is_mutual_fund"]) and pd.notna(r["proxy_ticker"]):
+            proxy = self.for_ticker(str(r["proxy_ticker"]))
+            own = self._own_idio(sid, ticker, r["instrument_type"] == "bond_fund")
+            return _combine((1.0, proxy), (1.0, own))
         if r["instrument_type"] == "bond_fund":
             duration = float(r["duration_years"])
             return _combine((1.0, self.rates(duration)), (1.0, self._own_idio(sid, ticker, True)))
@@ -115,7 +153,7 @@ class _SpecBuilder:
 
 
 def build_spec(inst: pd.DataFrame, p: PriceParams) -> ModelSpec:
-    """One Series per instrument, in instruments.csv order."""
+    """One Series per instrument, in instruments.csv order, then the PROXY- series."""
     b = _SpecBuilder(inst, p)
     series = [
         Series(
@@ -128,7 +166,8 @@ def build_spec(inst: pd.DataFrame, p: PriceParams) -> ModelSpec:
         )
         for _, r in inst.iterrows()
     ]
-    return ModelSpec(series, b.idio_vol, b.idio_share)
+    proxies = sorted(b.proxies, key=lambda s: s.series_id)
+    return ModelSpec(series + proxies, b.idio_vol, b.idio_share)
 
 
 def market_daily(p: PriceParams, seed: int, cal: Calendar) -> tuple[np.ndarray, np.ndarray]:
