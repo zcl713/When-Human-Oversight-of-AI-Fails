@@ -25,3 +25,92 @@ households:
   trust_equity_share: 0.6
   held_away_not_in_crm_rate: 0.0     # 0 = every account is in the CRM in the clean data
   held_away_mutual_funds_only: true  # generated 401(k)s hold mutual funds only (fixture is exempt)
+
+# Price layer (src/advisor_qa/world/prices.py). ALL PRICES ARE SYNTHETIC. Each value is marked:
+#   calibrated = from aggregate statistics (volatility, beta, correlation) of a provided ETF
+#                position-and-price dataset; none of its prices appear anywhere in the repo
+#   design     = a choice made for the experiment
+#   assumption = no data behind it
+# Returns and volatilities are daily, as decimals (0.0075 = 0.75%). Rules are keyed by ticker;
+# proxies that are not in instruments.csv are written as PROXY-<ticker>.
+prices:
+  start_date: 2026-01-02             # design; matches the fixture year
+  n_days: 180                        # design; must equal top-level n_days
+  holidays: [2026-01-01, 2026-01-19, 2026-02-16, 2026-04-03, 2026-05-25, 2026-06-19, 2026-07-03, 2026-09-07]  # design; 2026 NYSE holidays (real dates)
+  grid_start: "09:30"                # design; New York time
+  grid_end: "16:00"                  # design
+  grid_step_minutes: 5               # design
+  fixture_date: 2026-03-10           # design; from the fixture and clean_run.json
+  fixture_query_time: "14:05"        # design; from clean_run.json
+  anchor_date: 2026-03-09            # design; close on this date equals reference_price
+  val_date_fraction: 0.2             # design; contiguous block before test
+  test_date_fraction: 0.2            # design; must equal split.test_date_fraction
+  p_calm_to_stress: 0.015            # design; ~11% stress days (measured 17% in a crash-dominated window)
+  p_stress_to_calm: 0.12             # design; runs of ~8 days (measured median 10)
+  min_stress_share: 0.08             # design; resample the regime seed outside [min, max]
+  max_stress_share: 0.15             # design
+  min_stress_days_per_split: 5       # design
+  max_regime_tries: 1000             # design; seeds seed, seed+1, ... (spec said 20; only ~1% of paths pass, so accepted paths are a conditional sample)
+  market_ticker: SPY                 # design; SPY is the market factor
+  market_vol_calm: 0.0075            # calibrated (measured 0.77%)
+  market_vol_stress: 0.024           # calibrated (measured 2.33%)
+  market_drift_calm: 0.0004          # design (measured ~+0.05% in both regimes)
+  market_drift_stress: -0.0015       # design; stress days skew down
+  market_t_df: 5                     # assumption; Student-t, fat tails
+  tech_beta: 1.2                     # assumption; tech factor = 1.2 x market + noise (TQQQ underlying)
+  tech_noise_vol: 0.005              # assumption
+  intraday_share_equity: 0.6         # assumption; intraday bridge vol as share of daily vol
+  intraday_share_bond: 0.3           # assumption
+  betas:                             # beta on the market factor
+    IVV: 1.00                        # design; same index as SPY
+    VTI: 1.00                        # calibrated (measured 1.00)
+    SCHD: 0.92                       # calibrated (measured 0.92)
+    JEPI: 0.60                       # assumption
+  idio_vol:
+    IVV: 0.0001                      # design (measured 0.1% is mostly timing noise)
+    VFIAX: 0.0002                    # design; vs proxy SPY
+    VTI: 0.0010                      # calibrated (measured 0.12%)
+    SCHD: 0.0037                     # calibrated (measured 0.37%)
+    JEPI: 0.0030                     # assumption
+    FCNTX: 0.0025                    # assumption; growth fund vs proxy VUG
+    AGTHX: 0.0025                    # assumption; growth fund vs proxy VUG
+    BND: 0.0008                      # assumption; bond idio
+    BSV: 0.0008                      # assumption
+    GOVT: 0.0008                     # assumption
+    VBTLX: 0.0002                    # design; vs proxy BND
+    VBIRX: 0.0002                    # design; vs proxy BSV
+    VWIUX: 0.0017                    # calibrated vs proxy MUB (includes timing noise)
+    VTINX: 0.0005                    # assumption; target-date idio (not in the spec table)
+    VTHRX: 0.0005                    # assumption
+    VFORX: 0.0005                    # assumption
+    VFIFX: 0.0005                    # assumption
+  leverage:                          # design; exact daily-reset multiples
+    SSO: {multiple: 2, underlying: market}
+    TQQQ: {multiple: 3, underlying: tech}
+  target_date_equity_weight:         # assumption; rest is BND
+    VTINX: 0.30
+    VTHRX: 0.60
+    VFORX: 0.75
+    VFIFX: 0.90
+  target_date_bond_ticker: BND       # design
+  proxy_series:                      # simulated, never held; written as PROXY-VUG and PROXY-MUB
+    VUG: {kind: equity, beta: 1.02, idio_vol: 0.0038}  # calibrated (measured beta 1.02, idio 0.38%)
+    MUB: {kind: muni, duration: 5.8, rate_sensitivity: 0.8, idio_vol: 0.0008}  # assumption
+  proxy_reference_price: 100         # design; anchor price for PROXY- series
+  long_duration_threshold_years: 3.0 # design; above uses the 10-year yield, else the 2-year
+  sim_yield_vol_calm: 0.0004         # assumption; 4 bp/day, used only without FRED files
+  sim_yield_vol_stress: 0.0008       # assumption; 8 bp/day
+  sim_bond_equity_corr_calm: -0.15   # assumption; corr(bond return, r_SPY), i.e. corr(dyield, r_SPY) = +0.15
+  sim_bond_equity_corr_stress: -0.35 # assumption; flight to quality is stronger in stress
+  sim_yield_2y_10y_corr: 0.8         # assumption; not in the spec table
+  sim_start_yield_2y_pct: 3.5        # assumption; starting level for carry, percent
+  sim_start_yield_10y_pct: 4.2       # assumption
+  fixture_moves:                     # design; scripted latent moves at the fixture time (DAY_MOVES)
+    INS-01: -0.021
+    INS-02: -0.021
+    INS-03: -0.021
+    INS-05: -0.015
+    INS-06: -0.020
+    INS-08: -0.010
+  max_daily_move_unleveraged: 0.15   # design; sanity bound
+  max_daily_move_leveraged: 0.40     # design; sanity bound
