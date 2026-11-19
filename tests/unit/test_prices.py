@@ -4,7 +4,7 @@ All prices are synthetic. FRED-mode tests use the made-up yield files in tests/f
 never the real downloads.
 """
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +22,7 @@ from advisor_qa.world.market_calendar import (
 )
 from advisor_qa.world.price_model import DailyModel, simulate_daily
 from advisor_qa.world.price_params import PriceParams, load_price_config
+from advisor_qa.world.prices import PriceWorld, build_prices
 from advisor_qa.world.yields import FRED, SIMULATED, carry_forward, read_fred_series
 
 ETF_TYPES = {"equity_etf", "options_etf", "leveraged_etf"}
@@ -230,3 +231,94 @@ def test_money_market_and_target_date(cfg: tuple[int, PriceParams]) -> None:
     blend = 0.9 * spy + 0.1 * bnd
     r = m.returns[by_ticker["VFIFX"]][1:]
     assert np.abs(r - blend).max() < 0.005  # equity weight 0.90 plus a small idio
+
+
+# --- Intraday paths, anchoring and publishing (tests 3, 4) -------------------------------------
+
+
+@pytest.fixture(scope="module")
+def world(cfg: tuple[int, PriceParams]) -> PriceWorld:
+    seed, p = cfg
+    return build_prices(load_instruments(), p, seed)
+
+
+@pytest.fixture(scope="module")
+def world_fred(cfg: tuple[int, PriceParams]) -> PriceWorld:
+    seed, p = cfg
+    return build_prices(load_instruments(), p, seed, FAKE_FRED)
+
+
+@pytest.mark.parametrize("which", ["world", "world_fred"])
+def test_path_integrity(which: str, request: pytest.FixtureRequest) -> None:
+    w: PriceWorld = request.getfixturevalue(which)
+    assert len(w.times) == 79 and w.times[0] == "09:30" and w.times[-1] == "16:00"
+    for s in w.series:
+        path, close = w.paths[s.series_id][1:], w.closes[s.series_id]
+        assert not np.isnan(path).any() and not np.isnan(close).any(), s.series_id
+        assert (path > 0).all() and (close > 0).all(), s.series_id
+        assert np.array_equal(path[:, 0], close[:-1]), s.series_id
+        assert np.array_equal(path[:, -1], close[1:]), s.series_id
+
+
+def test_anchor_close_equals_reference_price(world: PriceWorld) -> None:
+    for s in world.series:
+        assert world.prior_close(s.series_id, "2026-03-10") == s.reference_price, s.series_id
+        assert world.latent_value(s.series_id, "2026-03-09T16:00:00") == s.reference_price
+
+
+def test_fund_published_price_is_previous_nav(world: PriceWorld) -> None:
+    days = world.calendar.days
+    funds = [s for s in world.series if s.is_mutual_fund]
+    assert len(funds) == int(load_instruments()["is_mutual_fund"].sum()) == 11
+    for s in funds:
+        for i, d in enumerate(days[1:], start=1):
+            nav = world.prior_close(s.series_id, d)
+            for t in world.times:
+                price, as_of = world.published_price(s.series_id, f"{d}T{t}:00")
+                assert price == nav and as_of == datetime.fromisoformat(f"{days[i - 1]}T16:00:00")
+        # never the latent value: published stays flat while the latent value moves
+        latent = world.paths[s.series_id][1:]
+        if s.ticker != "VMFXX":
+            assert (latent[:, 1:] != latent[:, :1]).any()
+
+
+def test_money_market_is_one_dollar(world: PriceWorld) -> None:
+    vmfxx = next(s.series_id for s in world.series if s.ticker == "VMFXX")
+    assert (world.closes[vmfxx] == 1.0).all() and (world.paths[vmfxx][1:] == 1.0).all()
+    assert world.published_price(vmfxx, "2026-06-01T11:00:00")[0] == 1.0
+
+
+def test_etf_published_equals_latent(world: PriceWorld) -> None:
+    for s in world.series:
+        if not s.is_mutual_fund:
+            ts = "2026-03-10T11:17:42"
+            price, as_of = world.published_price(s.series_id, ts)
+            assert price == world.latent_value(s.series_id, ts)
+            assert as_of == datetime(2026, 3, 10, 11, 15)
+
+
+def test_query_times_snap_down(world: PriceWorld) -> None:
+    spy, i = "INS-01", world.calendar.all_days.index(date(2026, 3, 10))
+    assert world.locate("2026-03-10T14:09:59") == (i, 55)
+    assert world.locate("2026-03-10T16:30:00") == (i, 78)
+    assert world.locate("2026-03-10T09:29:00") == (i - 1, 78)  # before the open: prior close
+    assert world.locate("2026-03-14T12:00:00") == (
+        world.calendar.all_days.index(date(2026, 3, 13)),
+        78,
+    )
+    assert world.latent_value(spy, "2026-01-02T09:00:00") == world.prior_close(spy, "2026-01-02")
+    with pytest.raises(ValueError):
+        world.latent_value(spy, "2025-12-31T12:00:00")
+    with pytest.raises(ValueError):
+        world.latent_value(spy, "2026-09-22T10:00:00")
+    with pytest.raises(ValueError):
+        world.published_price("INS-05", "2026-01-02T08:00:00")
+    with pytest.raises(KeyError):
+        world.latent_value("INS-99", "2026-03-10T10:00:00")
+
+
+def test_anchoring_keeps_model_returns(cfg: tuple[int, PriceParams], world: PriceWorld) -> None:
+    m = _all(cfg, None)
+    for s in world.series:
+        c = world.closes[s.series_id]
+        np.testing.assert_allclose(c[1:] / c[:-1] - 1, m.returns[s.series_id][1:], atol=1e-7)
