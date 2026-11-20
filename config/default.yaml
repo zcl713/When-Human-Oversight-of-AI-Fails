@@ -7,6 +7,7 @@ n_days: 180 # trading days
 questions_per_day: 60 
 review_capacity_k: [0.05, 0.10]   # fraction of runs reviewed 
 split:
+  val_household_fraction: 0.2        # design; households split 60/20/20 by seeded hash (decisions.md 2026-11-20)
   test_household_fraction: 0.2
   test_date_fraction: 0.2
 

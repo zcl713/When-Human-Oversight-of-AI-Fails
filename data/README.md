@@ -16,7 +16,7 @@ Licence terms for each source are listed below. No real client data anywhere.
   DOI 10.17016/8799.1. Extract (Excel/CSV): https://www.federalreserve.gov/econres/files/scfp2025excel.zip
   Variable definitions: https://www.federalreserve.gov/econres/files/bulletin.macro.txt
 - The source page states no redistribution terms, so the raw file is **not** committed. Put
-  `SCFP2025.xlsx` in `data/raw/` or pass `--scf-path` / set `SCF_PATH`.
+  `SCFP2025.csv` (what the zip contains as of 2026-11) or `SCFP2025.xlsx` in `data/raw/` or pass `--scf-path` / set `SCF_PATH`.
 - 21,800 records for 4,360 families (5 implicates each). `WGT` is per record and sums to the US family
   population. Households are drawn from records with FIN in $250K-$5M and at least $100K of modelled
   holdings (1,160 families, 5,377 records).

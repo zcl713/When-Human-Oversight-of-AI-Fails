@@ -84,3 +84,28 @@ each marked calibrated, design or assumption.
 - **Separation.** The latent table lives in `advisor_qa.world.latent`. A test fails if any module
   under a `checks` or `scoring` package (or named so) imports it, names `latent_value`, or reads
   `prices_latent.csv`.
+
+## 2026-11-20: interfaces for truth, runs and labels, and the household split
+- **Truth function.** `impact(household_id, as_of, scope, since=None)` in `advisor_qa.truth`
+  returns dollars and percent. `scope` is an explicit list of `account_id`s; helpers resolve
+  "all accounts" and "CRM accounts only". The question generator decides which accounts a question
+  really covers (I2, D2). Dollars = sum of qty x (latent value at `as_of` - start value) over
+  in-scope holdings. The start value is the prior close when `since` is None (today) or the
+  close of the day before `since` (week, MTD, YTD inside the price window; I5).
+  Percent = dollars / in-scope value at the start. Mutual funds use their latent intraday NAV.
+  Timestamps snap like `PriceWorld.locate`. The truth function reads a `PriceWorld`, so the
+  fixture test builds prices in memory and does not need files in `data/synthetic/`.
+- **Number links.** `ToolCall.output_hash` is the first 12 hex characters of the sha256 of the
+  tool output as canonical JSON (sorted keys, no spaces). `NumberLink.source` is
+  `"<output_hash>:<key>"` (e.g. `"9f1c2ab04d3e:dollar_impact"`), or null when ungrounded.
+- **Runs and labels storage.** JSONL, per split: `runs/{train,val,test}.jsonl` (one `RunTrace`
+  per line), `labels/{train,val,test}.jsonl` (one `RunLabel` per line, keyed by `run_id`),
+  `split_households.csv`, and `manifest.json` (seed, config hash, counts, schema version).
+  Checks can open the train runs without touching test runs or any labels.
+- **Household split.** 60/20/20 train/val/test, assigned by a seeded hash of `household_id`.
+  Diagonal with the date split: a run on a test date draws only from test households (likewise
+  val and train). The fixture HH-004217 is pinned to train (its day, 2026-03-10, is a train date).
+- **Tools (provisional until Lopa confirms).** `get_client_accounts`, `get_positions`,
+  `get_market_prices`, `calculate_portfolio_impact`, `get_benchmark`. The list and the
+  intent-to-`expected_tool_set` map live in config, so the confirmed inventory is a config edit.
+  "Wrong tool" (T1) stays out of `FailureModeId` until then.

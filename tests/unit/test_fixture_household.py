@@ -64,3 +64,25 @@ def test_clean_run_json_matches_fixture() -> None:
     assert sum(h.qty * h.price for h in trace.holdings) == trace.base == 1_200_000
     want = ["taxable", "ira", "401k_held_away"]
     assert sorted(set(acct_type.values())) == sorted(want) == sorted(trace.accounts_in_crm)
+
+
+def test_truth_function_reproduces_fixture_from_price_layer() -> None:
+    """-$21,700 and -1.8% from the real (synthetic) price layer via the truth function, not from
+    DAY_MOVES."""
+    from advisor_qa.truth import Truth
+    from advisor_qa.world.price_params import load_price_config
+    from advisor_qa.world.prices import build_prices
+
+    seed, p = load_price_config()
+    t = fixture_tables(load_instruments())
+    truth = Truth(t.holdings, t.accounts, build_prices(load_instruments(), p, seed))
+    hh = fx.FIXTURE_HOUSEHOLD_ID
+
+    got = truth.impact(hh, "2026-03-10T14:05:00", truth.all_accounts(hh))
+    assert got.dollars == pytest.approx(-21_700, abs=0.01)
+    assert got.base == pytest.approx(1_200_000, abs=0.01)
+    assert round(got.pct, 1) == -1.8
+    # scope is explicit: dropping the held-away 401(k) drops its -$2,100
+    no_401k = truth.impact(hh, "2026-03-10T14:05:00", ["ACC-88120", "ACC-88121"])
+    assert no_401k.dollars == pytest.approx(-19_600, abs=0.01)
+    assert no_401k.pct == pytest.approx(-19_600 / 1_100_000 * 100, abs=1e-6)

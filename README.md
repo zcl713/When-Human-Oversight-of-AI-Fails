@@ -39,7 +39,7 @@ Build the household tables (about 50 households, fixture included; needs the SCF
 `data/README.md`):
 
 ```
-uv run python -m advisor_qa.world.build --n 50 --out data/synthetic/v0 --scf-path <path to SCFP2025.xlsx>
+uv run python -m advisor_qa.world.build --n 50 --out data/synthetic/v0 --scf-path <path to SCFP2025.csv or .xlsx>
 ```
 
 Troubleshooting:
