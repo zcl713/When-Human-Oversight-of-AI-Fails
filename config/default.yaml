@@ -26,6 +26,8 @@ households:
   trust_equity_share: 0.6
   held_away_not_in_crm_rate: 0.0     # 0 = every account is in the CRM in the clean data
   held_away_mutual_funds_only: true  # generated 401(k)s hold mutual funds only (fixture is exempt)
+  foreign_household_rate: 0.15       # assumption; share of households with a foreign-listed holding (D6)
+  foreign_max_equity_share: 0.10     # assumption; at most this share of taxable equity
 
 # Price layer (src/advisor_qa/world/prices.py). ALL PRICES ARE SYNTHETIC. Each value is marked:
 #   calibrated = from aggregate statistics (volatility, beta, correlation) of a provided ETF
@@ -43,6 +45,7 @@ prices:
   grid_step_minutes: 5               # design
   fixture_date: 2026-03-10           # design; from the fixture and clean_run.json
   fixture_query_time: "14:05"        # design; from clean_run.json
+  foreign_home_close_time: "01:00"   # design; Tokyo 15:00 JST in New York time (D6 foreign holding)
   anchor_date: 2026-03-09            # design; close on this date equals reference_price
   val_date_fraction: 0.2             # design; contiguous block before test
   test_date_fraction: 0.2            # design; must equal split.test_date_fraction
@@ -67,12 +70,14 @@ prices:
     VTI: 1.00                        # calibrated (measured 1.00)
     SCHD: 0.92                       # calibrated (measured 0.92)
     JEPI: 0.60                       # assumption
+    SYN-JPEQ: 0.70                   # assumption; synthetic foreign holding's fair value vs US market
   idio_vol:
     IVV: 0.0001                      # design (measured 0.1% is mostly timing noise)
     VFIAX: 0.0002                    # design; vs proxy SPY
     VTI: 0.0010                      # calibrated (measured 0.12%)
     SCHD: 0.0037                     # calibrated (measured 0.37%)
     JEPI: 0.0030                     # assumption
+    SYN-JPEQ: 0.0060                 # assumption
     FCNTX: 0.0025                    # assumption; growth fund vs proxy VUG
     AGTHX: 0.0025                    # assumption; growth fund vs proxy VUG
     BND: 0.0008                      # assumption; bond idio

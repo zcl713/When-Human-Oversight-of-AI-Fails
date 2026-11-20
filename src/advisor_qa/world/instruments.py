@@ -8,6 +8,9 @@ import pandas as pd
 from advisor_qa.world.params import REPO_ROOT
 
 INSTRUMENTS_CSV = REPO_ROOT / "data" / "reference" / "instruments.csv"
+# intraday: US-listed, trades all day; end_of_day_nav: mutual fund, one NAV per day;
+# foreign_close: listed abroad, the feed shows the home-market close during US hours (D6)
+PRICING = {"intraday", "end_of_day_nav", "foreign_close"}
 
 COLUMNS = [
     "instrument_id", "archetype", "ticker", "instrument_type", "asset_class", "duration_years",
@@ -21,8 +24,8 @@ def load_instruments(path: Path = INSTRUMENTS_CSV) -> pd.DataFrame:
         raise ValueError(f"instruments.csv columns must be {COLUMNS}")
     if df["instrument_id"].duplicated().any():
         raise ValueError("duplicate instrument_id")
-    if not set(df["pricing"]) <= {"intraday", "end_of_day_nav"}:
-        raise ValueError("pricing must be intraday or end_of_day_nav")
+    if not set(df["pricing"]) <= PRICING:
+        raise ValueError(f"pricing must be one of {sorted(PRICING)}")
     if (df["is_mutual_fund"] != (df["pricing"] == "end_of_day_nav")).any():
         raise ValueError("mutual funds must be end_of_day_nav and everything else intraday")
     return df
@@ -50,6 +53,7 @@ def pool_candidates(inst: pd.DataFrame) -> dict[str, Candidates]:
         "short": ["us_bond_short"],
         "muni": ["us_bond_muni"],
         "cash": ["cash"],
+        "foreign": ["intl_equity_developed"],
     }
     out = {n: Candidates(_ids(inst, c, False), _ids(inst, c, True)) for n, c in pools.items()}
     out["spec"] = Candidates(tuple(spec["instrument_id"]), ())

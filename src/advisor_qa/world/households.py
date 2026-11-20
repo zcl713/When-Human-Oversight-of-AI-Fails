@@ -130,18 +130,42 @@ def _merge_small(pools: dict[str, float], min_holding: float) -> dict[str, float
     return out
 
 
+def _carve_foreign(
+    pools: dict[str, dict[str, float]], p: HouseholdParams, rng: np.random.Generator
+) -> None:
+    """Move a share of taxable equity into a foreign-listed holding (D6). Uses its own stream,
+    so households without one draw exactly as before."""
+    is_foreign = rng.random() < p.foreign_household_rate
+    frac = rng.uniform(0.02, p.foreign_max_equity_share)
+    taxable = pools.get(TAXABLE, {})
+    if is_foreign and taxable.get("equity", 0.0) > 0:
+        taxable["foreign"] = frac * taxable["equity"]
+        taxable["equity"] -= taxable["foreign"]
+
+
 def _household_rows(
-    row: pd.Series, p: HouseholdParams, inst: pd.DataFrame, rng: np.random.Generator
+    row: pd.Series,
+    p: HouseholdParams,
+    inst: pd.DataFrame,
+    rng: np.random.Generator,
+    foreign_rng: np.random.Generator | None = None,
 ) -> list[tuple[str, dict[str, float]]]:
     """(account type, instrument_id -> dollars) for each non-empty account."""
     cands = pool_candidates(inst)
     result: list[tuple[str, dict[str, float]]] = []
-    for acct_type, pools in _account_pools(row, p, rng).items():
+    all_pools = _account_pools(row, p, rng)
+    if foreign_rng is not None and cands["foreign"].etf:
+        _carve_foreign(all_pools, p, foreign_rng)
+    for acct_type, pools in all_pools.items():
         pools = _merge_small(pools, p.min_holding_value)
         by_instrument: dict[str, float] = {}
         mf_only = acct_type == HELD_AWAY and p.held_away_mutual_funds_only
         etf_share = 0.0 if mf_only else p.etf_share_of_fund_dollars
         for pool, dollars in pools.items():
+            if pool == "foreign":  # one instrument; no draws from the main stream
+                foreign_id = cands["foreign"].etf[0]
+                by_instrument[foreign_id] = by_instrument.get(foreign_id, 0.0) + dollars
+                continue
             c = (
                 Candidates((), (target_date_id(inst, float(row["AGE"])),))
                 if pool == "tdf"
@@ -238,7 +262,8 @@ def generate_world(
         rng = np.random.default_rng([seed, 3, idx])
         advisor = advisors[int(rng.integers(len(advisors)))]
         total = 0.0
-        for acct_type, dollars_by_ins in _household_rows(rec, p, inst, rng):
+        foreign_rng = np.random.default_rng([seed, 4, idx])
+        for acct_type, dollars_by_ins in _household_rows(rec, p, inst, rng, foreign_rng):
             while f"ACC-{next_acc:05d}" in fx.FIXTURE_ACCOUNT_IDS:
                 next_acc += 1
             acc_id = f"ACC-{next_acc:05d}"
