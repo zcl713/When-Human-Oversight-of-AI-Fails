@@ -127,9 +127,12 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=REPO_ROOT / "data/synthetic/runs")
     ap.add_argument("--fred-dir", type=Path, default=None)
     ap.add_argument("--max-days", type=int, default=None, help="only the first N trading days")
+    ap.add_argument("--rate-scale", type=float, default=None, help="override injection.rate_scale")
     args = ap.parse_args()
 
     seed, pipe, inj = load_pipeline_config()
+    if args.rate_scale is not None:
+        inj = inj.model_copy(update={"rate_scale": args.rate_scale})
     price_seed, pp = load_price_config()
     h = args.households
     hh, acc, hold = (pd.read_csv(h / f"{n}.csv") for n in ("households", "accounts", "holdings"))
