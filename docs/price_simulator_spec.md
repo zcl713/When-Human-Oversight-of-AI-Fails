@@ -26,7 +26,7 @@ Python interface, all keyed by `instrument_id` and a timestamp:
 - `PriceWorld.latent_value(instrument_id, ts) -> float` (truth only)
 - `PriceWorld.prior_close(instrument_id, date) -> float`
 
-Query times snap down to the 5-minute grid. Checks and scoring must never import the latent file or `latent_value`, the same rule the roadmap sets for `advisor_qa.schema.labels`.
+Query times snap down to the 5-minute grid. Proxy series that are not in instruments.csv are written as PROXY-VUG and PROXY-MUB; SPY, BND and BSV keep their own ids. Every CSV starts with a # comment line saying the prices are synthetic, so read them with comment='#' or the module's loader, and a README.md in the output folder says the same. Checks and scoring must never import the latent file or `latent_value`, the same rule the roadmap sets for `advisor_qa.schema.labels`.
 
 ## 3. Model
 
@@ -34,7 +34,7 @@ Each day's close-to-close return comes from one market factor and a small idiosy
 
 **Calendar.** 180 real NYSE trading days starting 2026-01-02 (ending 2026-09-21), using the 2026 exchange holidays (Jan 1, Jan 19, Feb 16, Apr 3, May 25, Jun 19, Jul 3, Sep 7). The fixture day 2026-03-10 is trading day 46. The dates are real but the prices are not, so label every output as synthetic. Simulate one extra day before the window to give the first day a prior close.
 
-**Regimes.** A two-state Markov chain, calm and stress, starting calm. Defaults give about 11% stress days in runs of about 8. Resample (seed, seed+1, … up to 20 tries) until the stress share is between 8% and 15% and each of train, val and test has at least 5 stress days.
+**Regimes.** A two-state Markov chain, calm and stress, starting calm. Defaults give about 11% stress days in runs of about 8. Resample (seed, seed+1, … up to 1000 tries, and raise an error if none qualifies; only about 1% of paths do, so the accepted path is a conditional sample) until the stress share is between 8% and 15% and each of train, val and test has at least 5 stress days.
 
 **Split.** Contiguous blocks by date: the last 20% of days are test, the 20% before them are validation, and the rest are train, matching `test_date_fraction`. Regimes persist from day to day, so random dates would leak volatility information between splits. The fixture day falls in train.
 
@@ -52,7 +52,7 @@ Each day's close-to-close return comes from one market factor and a small idiosy
 | VTHRX, VFORX, VFIFX, VTINX | `w × r_SPY + (1 − w) × r_BND + idio`, no proxy ETF; w by vintage in the parameters table |
 | VMFXX | NAV fixed at 1.00 |
 
-**Yields.** If `fred_dir` is given, read `DGS2.csv` and `DGS10.csv` (the FRED downloads) and carry the previous value over days where the value is blank (older FRED downloads use a dot). Bond returns then use real yield changes. FRED yields are in percent, so divide the changes by 100. The cost is that bond returns are independent of the simulated equity returns, so there is no flight-to-quality effect. If `fred_dir` is absent, simulate the yield changes instead, with a small negative correlation to `r_SPY` that is stronger in stress.
+**Yields.** If `fred_dir` is given, read `DGS2.csv` and `DGS10.csv` (the FRED downloads) and carry the previous value over days where the value is blank (older FRED downloads use a dot). Bond returns then use real yield changes. FRED yields are in percent, so divide the changes by 100. The cost is that bond returns are independent of the simulated equity returns, so there is no flight-to-quality effect. If `fred_dir` is absent, simulate the yield changes instead, with yield changes positively correlated to `r_SPY` (+0.15 calm, +0.35 stress), so bond returns are negatively correlated with equities (−0.15 calm, −0.35 stress), as in a flight to quality.
 
 **Intraday path.** Value at grid time t is `P0 × (1 + x(t))`, where `x` is a path from 0 to the day's return `R` over the grid's 79 points, `x(t) = R·s + σ_intra × (W(s) − s·W(1))` with `s` the fraction of the day elapsed. Build one bridge for the market factor, one for the tech factor, and one idio bridge per instrument, then combine them with the same βs so that related instruments move together. The path starts at the prior close and ends exactly at the close.
 
@@ -106,10 +106,10 @@ The provided dataset's prices carry timing noise. Two ETFs on near-identical ind
 | Muni fund vs proxy MUB, idio per day | 0.17% | calibrated; includes timing noise |
 | Bond idio volatility per day | 0.08% | assumption |
 | Bond–equity link (FRED mode) | none | calibrated; measured correlations BND 0.08, BSV −0.10, GOVT −0.47 |
-| Target-date equity weight | income 0.30, 2030 0.60, 2040 0.75, 2050 0.90 | assumption |
+| Target-date equity weight | income 0.30, 2030 0.60, 2040 0.75, 2050 0.90; target-date idio 0.05% per day | assumption |
 | Simulated yield change (no FRED), calm / stress | 4 bp / 8 bp per day | assumption |
-| Yield–equity correlation (no FRED), calm / stress | −0.15 / −0.35 | assumption |
-| Minimum stress days per split | 5 | design; resample the seed until met |
+| Bond–equity correlation (no FRED), calm / stress | bond return vs r\_SPY −0.15 / −0.35 (yield change vs r\_SPY +0.15 / +0.35) | assumption |
+| Minimum stress days per split | 5 | design; resample until met, up to 1000 tries |
 
 ## 6. Acceptance tests
 

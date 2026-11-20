@@ -1,6 +1,6 @@
 # Roadmap: what is done, what is left, who does what
 
-Last updated 2026-11-13. Decisions behind the finished work are in `decisions.md`; unresolved
+Last updated 2026-11-19. Decisions behind the finished work are in `decisions.md`; unresolved
 questions are in `open_questions.md`.
 
 ## Status
