@@ -10,7 +10,9 @@ Resolved items move to `decisions.md`. The owner is who needs the answer to proc
   exposed run) (A, B). Implemented as placeholders. Because many modes are exposed on most runs,
   they give about 52% of runs an error, which caps the lift of any review at about 2x;
   `injection.rate_scale` (or `generate --rate-scale`) scales them all. 0.2 gives about 13%.
-  What prevalence the study should assume is the open part.
+  What prevalence the study should assume is the open part. **Check with Lopa (LPL)** whether
+  there is a requirement or an observed error rate to target; the 0.2 used in the first
+  evaluation was our own choice, not calibrated to anything.
 - **Tool inventory and what counts as a "wrong tool"** (B): confirm with Lopa at LPL. A provisional
   list is in use (see `decisions.md`, 2026-11-20).
 - **ID for the "wrong tool" failure mode** (B): the old prototype used T1, pending Lopa's review. Not
