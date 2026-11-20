@@ -109,3 +109,41 @@ each marked calibrated, design or assumption.
   `get_market_prices`, `calculate_portfolio_impact`, `get_benchmark`. The list and the
   intent-to-`expected_tool_set` map live in config, so the confirmed inventory is a config edit.
   "Wrong tool" (T1) stays out of `FailureModeId` until then.
+
+## 2026-11-20: pipeline, injection, checks and evaluation
+- **Answers are stored next to traces.** The 39-field trace has no answer text, so
+  `answers/{split}.jsonl` holds `{run_id, answer}`. The Answer fields (numbers, links, phrases,
+  estimate label, disclosure) are derived from it by `advisor_qa.derive`, which has no access to
+  prices, households or labels. `Holding.price` is the price used at the run time; the start
+  prices are in `inputs.start_prices`, so the base is `sum(qty x start price)`.
+- **Mock pricing.** `get_market_prices` gives mutual funds the firm's intraday *indicative NAV*
+  (the latent value) and the foreign holding a *fair value* (also latent). The official NAV
+  (previous day) and the home-market close are what D1 and D6 substitute. A correct answer
+  therefore equals the truth function exactly (the generator fails if any clean run differs by
+  more than rounding) and is labelled an estimate when it uses indicative or fair values.
+- **Injection configures faults, it never edits traces.** Each mode adds hooks (intent
+  resolution, tool output, calculation, answer, extra tool calls) and the same agent runs with
+  them, so hashes, numbers and text stay consistent. Exposure rules decide which runs a mode can
+  hit; rates are the likelihood placeholders times `injection.rate_scale`. D5 is a shared
+  incident (one stale snapshot for every run in a 2-hour window, same `root_cause_id`). S2
+  rewrites the question to another advisor's household; S1 and S2 run alone; I3 (no calculation)
+  only combines with S4; O1 needs a data mode on the same run. A drawn mode is labelled even if
+  another mode on the run masks it (e.g. D3 drops the account D4 targeted).
+- **Severity placeholder.** Highest suite severity among the run's modes + log10(1 + dollar
+  error), where the dollar error is |first dollar figure in the answer - true impact of the
+  question as asked|. Still open (open_questions.md).
+- **Client names** are made-up combinations of common first names and surnames (80 surnames, so
+  surname-only prompts collide; S1). The fixture client is "Avery Chen". `directory.csv` is the
+  CRM directory (advisor and name per household).
+- **Checks read the trace and the CRM directory only.** S1 and S2 need the advisor assignment,
+  which no trace field carries. 30 checks map one-to-one to the catalogue (`mapped_check`); four
+  supporting signals (agent did its own arithmetic, expected tool missing, no disclosure,
+  advisor covers several households with the named surname) carry weight 1. A test walks the
+  imports of every checks and scoring module and fails if any reaches labels, latent prices,
+  the truth function, the injectors or the evaluation.
+- **Tuning on train only.** Two thresholds were set on the train split: the I1 intent-score gap
+  (0.5) and splitting "advisor has several namesakes" out of S1 into a supporting signal (it
+  fired on 206 clean train runs). The test split was used only for the final report.
+- **Risk score v1:** weighted sum of flags, weight = suite severity of the mapped test. Ties at
+  the K cut-off are broken by a seeded draw per run. Random review is reported as the mean and
+  5-95% band of 1,000 seeded draws.

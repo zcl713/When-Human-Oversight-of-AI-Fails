@@ -1,6 +1,6 @@
 # Roadmap: what is done, what is left, who does what
 
-Last updated 2026-11-19. Decisions behind the finished work are in `decisions.md`; unresolved
+Last updated 2026-11-20. Decisions behind the finished work are in `decisions.md`; unresolved
 questions are in `open_questions.md`.
 
 ## Status
@@ -8,14 +8,16 @@ questions are in `open_questions.md`.
 | Piece | Where | Status |
 |---|---|---|
 | Trace schema (39 fields, 7 groups) and hidden `RunLabel` | `src/advisor_qa/schema/` | Done |
-| Test catalogue (30 failure modes D/C/I/O/S, scores) | `data/reference/test_catalogue.csv` | Scores done. `mapped_mutation` and `mapped_check` are empty. |
+| Test catalogue (30 failure modes D/C/I/O/S, scores) | `data/reference/test_catalogue.csv` | **Done** (scores; `mapped_mutation` and `mapped_check` filled) |
 | Households, accounts, holdings, instruments | `src/advisor_qa/world/`, `data/reference/instruments.csv` | **Done** (SCF sampler, fixture HH-004217, checks, build command) |
 | Calendar, market days, prices | `src/advisor_qa/world/prices.py`, `config/default.yaml` (`prices:`) | **Done** (synthetic prices, 180 trading days, fixture day pinned; spec in `price_simulator_spec.md`) |
-| Date split (train / validation / test) | `calendar.csv` from the price layer | Dates done (contiguous blocks, test last, each with at least 5 stress days). Household split not started. |
-| Ground-truth portfolio impact | `src/advisor_qa/truth/` | Empty |
-| Questions, mock tools, correct agent, clean traces | `src/advisor_qa/pipeline/` | Empty |
-| Error injection and hidden labels | `src/advisor_qa/inject/` | Empty |
-| Checks, risk score, evaluation at capacity K | not scaffolded | Not started |
+| Date split (train / validation / test) | `calendar.csv` from the price layer | **Done** (contiguous blocks, test last, each with at least 5 stress days) |
+| Household split | `src/advisor_qa/world/split.py`, `split_households.csv` | **Done** (60/20/20 seeded, fixture in train, diagonal with the date split) |
+| Ground-truth portfolio impact | `src/advisor_qa/truth/` | **Done** (`Truth.impact`; fixture -$21,700 from the price layer) |
+| Questions, mock tools, correct agent, clean traces | `src/advisor_qa/pipeline/` | **Done** (10 question kinds; provisional tools; `clean_run.json` is the generated fixture run) |
+| Error injection and hidden labels | `src/advisor_qa/inject/` | **Done** (all 30 modes; placeholder rates and severity) |
+| Run and label storage | `src/advisor_qa/store/` | **Done** (per-split JSONL, manifest) |
+| Checks, risk score, evaluation at capacity K | `src/advisor_qa/checks/`, `scoring/`, `eval/` | **Done, v1** (30 mapped checks, weighted sum, random vs risk at 5% / 10%) |
 | Dashboard | `dashboard/` | Prototype on placeholder data. Update once there are findings. |
 
 ## What the household layer gives you
@@ -39,7 +41,17 @@ Mutual funds publish the previous day's NAV all day (the D1 setup); `latent_valu
 enforces it). Without `--fred-dir` the bond yields are simulated. On the fixture day at 14:05 the
 latent values give HH-004217 a true impact of exactly -$21,700.
 
-## Agree these three interfaces first
+## Run everything
+```
+uv run python -m advisor_qa.world.build --n 750 --out data/synthetic/households
+uv run python -m advisor_qa.world.prices --out data/synthetic/prices --fred-dir data/raw/fred
+uv run python -m advisor_qa.pipeline.generate --fred-dir data/raw/fred        # about 1 minute
+uv run python -m advisor_qa.eval.evaluate --split test                         # report.md
+```
+Use the same `--fred-dir` (or none) for prices and runs. `generate --rate-scale 0.2` gives about
+13% of runs an error instead of about 52% at the literal placeholder rates.
+
+## Agree these three interfaces first (settled 2026-11-20, see decisions.md)
 1. **Price table**: `instrument_id`, date (and time for intraday), price. Mutual funds have one NAV per day.
 2. **Truth function**: `impact(household, date, scope)` returns dollar and percent impact.
 3. **Runs and labels files**: one trace per run (nested, so JSONL is the likely format) and a

@@ -5,7 +5,7 @@
 | `reference/` | Hand-entered tables: instrument archetypes, test catalogue | yes |
 | `raw/` | Downloaded source data (SCF, prices, FRED) | no |
 | `interim/` | Cleaned intermediate data | no |
-| `synthetic/` | Generated tables: household CSVs, synthetic price CSVs; runs and labels files later (format open) | no |
+| `synthetic/` | Generated: household CSVs, synthetic price CSVs, runs (per-split JSONL traces, answers, labels), evaluation reports | no |
 
 Licence terms for each source are listed below. No real client data anywhere.
 
@@ -42,8 +42,14 @@ choices or assumptions, marked in `config/default.yaml` (`prices:`). Every price
 `#` notice line, so read it with `pd.read_csv(path, comment="#")` or
 `advisor_qa.world.prices.read_price_table`.
 
+### Runs (synthetic)
+`advisor_qa.pipeline.generate` writes `data/synthetic/runs/`: `runs/`, `answers/` and `labels/`
+(one JSONL file per split; labels are evaluation-only), `split_households.csv`, `directory.csv`
+(CRM directory with made-up client names) and `manifest.json`. Layout: `advisor_qa/store/runs.py`.
+
 ### What is generated, not SCF
 Advisors, account IDs, security-level holdings, ETF vs mutual-fund split, options/leveraged ETF
-holders, `in_crm` flags and the fixture household HH-004217. See `config/default.yaml` (`households:`)
+holders, the synthetic foreign-listed holding `SYN-JPEQ` (not a real security), client names,
+same-day cash flows, `in_crm` flags and the fixture household HH-004217. See `config/default.yaml` (`households:`)
 and `data/reference/instruments.csv` (`reference_price` is a nominal price, not a quote; each row's `notes`
 say what was checked against public factsheets on 2026-11-13 and what was not).
