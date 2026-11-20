@@ -52,7 +52,7 @@ class NumberLink(BaseModel):
     """A number in the answer text matched to the tool output or calculation value it came from.
 
     Derived by the QA layer. `source` is None when no match is found, i.e. the number is ungrounded.
-    TODO(stage 3): the format of `source` (output hash vs calculation value name) is not fixed.
+    `source` is '<output_hash>:<key>' (e.g. '9f1c2ab04d3e:dollar_impact'; decisions.md 2026-11-20).
     """
 
     number: str  # as displayed in the answer, e.g. "-$13,400" or "-1.2%"

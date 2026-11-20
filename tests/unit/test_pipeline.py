@@ -1,5 +1,4 @@
 import json
-from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -153,7 +152,8 @@ def test_derive_parsing() -> None:
     assert derive.requested_window("How has it done this month?") == "mtd"
     assert derive.requested_benchmark("versus the S&P 500 today") == "SPY"
     assert derive.named_surname("How is the Garcia household doing?") == "Garcia"
-    assert derive.fmt_pct(-0.0042) == "-0.00%" or derive.fmt_pct(-0.0042) == "0.00%"
+    assert derive.fmt_pct(-1.8083) == "-1.8%" and derive.fmt_pct(0.256) == "+0.26%"
+    assert derive.fmt_pct(-0.0042) == "0.00%" and derive.fmt_dollars(-21_700.4) == "-$21,700"
 
 
 def test_fixture_question_identity(kit: Kit) -> None:
@@ -161,7 +161,7 @@ def test_fixture_question_identity(kit: Kit) -> None:
     assert (q.household_id, q.advisor_id, q.prompt) == (
         fx.FIXTURE_HOUSEHOLD_ID, fx.FIXTURE_ADVISOR_ID, "How much has my portfolio lost today?",
     )  # fmt: skip
-    assert replace(q, turn=1) == q
+    assert q.pinned_clean and q.turn == 1 and q.window == "intraday"
 
 
 if __name__ == "__main__":

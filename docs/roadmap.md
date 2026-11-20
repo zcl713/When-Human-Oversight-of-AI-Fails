@@ -51,43 +51,52 @@ uv run python -m advisor_qa.eval.evaluate --split test                         #
 Use the same `--fred-dir` (or none) for prices and runs. `generate --rate-scale 0.2` gives about
 13% of runs an error instead of about 52% at the literal placeholder rates.
 
-## Agree these three interfaces first (settled 2026-11-20, see decisions.md)
-1. **Price table**: `instrument_id`, date (and time for intraday), price. Mutual funds have one NAV per day.
-2. **Truth function**: `impact(household, date, scope)` returns dollar and percent impact.
-3. **Runs and labels files**: one trace per run (nested, so JSONL is the likely format) and a
-   separate labels file keyed by `run_id`. Parquet is not usable on every machine (see README).
+## Interfaces (settled 2026-11-20, see decisions.md)
+1. **Price table**: `instrument_id`, date (and time for intraday), price. Mutual funds have one NAV
+   per day. `PriceWorld` in Python; CSVs in `data/synthetic/prices/`.
+2. **Truth function**: `Truth.impact(household_id, as_of, scope, since=None)` returns dollars and
+   percent. `scope` is a list of account_ids; `since` gives week / month / year windows.
+3. **Runs and labels**: `runs/{split}.jsonl` (one `RunTrace` per line), `labels/{split}.jsonl`
+   (one `RunLabel` per line, keyed by `run_id`), `answers/{split}.jsonl`, `manifest.json`.
 
-## Proposed split (3 people)
+## What the runs give you
+`advisor_qa.pipeline.generate` writes 10,800 runs (180 days x 60 questions) to
+`data/synthetic/runs/`. Each day's questions use households from the same split as the date. The
+fixture run (HH-004217, 2026-03-10 14:05) is always clean and equals `tests/fixtures/clean_run.json`.
+`advisor_qa.eval.evaluate` writes `report.md`, `report.json` and `flags.csv` per split to
+`data/synthetic/eval/`. First results (test split, decisions.md): at the literal placeholder
+rates about 52% of runs have an error and risk-based review catches about 1.9x as many as random;
+at `--rate-scale 0.2` (13%) it is 7.5x, close to the 7.6x ceiling. Read these as an upper bound
+(see "Known gaps" in open_questions.md).
 
-### Person A: world and truth (dataset)
-- Calendar of market days, prices (real or synthetic, see open questions), the date split with no
-  date leakage between train, validation and test.
-- Ground-truth impact. Pass the fixture test: -$21,700 on the fixture day moves
-  (`tests/unit/test_fixture_household.py`).
-- Add a foreign instrument for D6; reuse households across days.
-- Inject the **data and calculation errors**: D1-D7 and C1-C7 (14 modes).
+## What is left
+Roughly in order. Owners follow the original split: A (world and truth), B (agent and runs),
+C (checks and evaluation).
 
-### Person B: agent and runs (dataset)
-- Question generator across intents, including the ambiguous ones.
-- Mock tools, the correct agent, clean traces (`tests/fixtures/clean_run.json` is the target shape).
-- Inject the **intent, overconfidence and security errors**: I1-I6, O1-O6, S1-S4 (16 modes).
-  Write the hidden `RunLabel` for every injected error.
-- Run assembler (runs file plus labels file) and the determinism test
-  (`tests/integration/test_determinism.py`, currently skipped).
-- If B is overloaded, move S1-S4 to A.
-
-### Person C: checks (QA layer)
-- Deterministic checks that read a trace only, mapped to the test catalogue (fill `mapped_check`).
-- Risk score: a weighted sum of check flags, as a swappable scorer.
-- Evaluation: at capacity K (5% and 10% by default), compare random review with risk-based review
-  and report which errors land in the reviewed set.
-- Can start now using `tests/fixtures/clean_run.json` and hand-built broken traces. Tune on real
-  runs once B delivers them.
-- **Hard rule:** checks and scoring never import `advisor_qa.schema.labels`. Only the evaluation
-  step compares flags with labels. Add a test that enforces this.
+1. **Answers from Lopa (LPL)**: tool inventory and "wrong tool" (B), whether there is a target
+   error rate for `rate_scale` (A, B), and whether the firm shows intraday indicative NAVs (A).
+   Each is a config or small code change once answered.
+2. **Failure rates and severity** (A, B): replace the placeholders; then regenerate and re-run
+   the evaluation.
+3. **Independent tests for the truth function** (A): hand-calculated cases (leveraged ETF, foreign
+   holding, a week-to-date window), and decide what `as_of` on a weekend or holiday should do
+   (today it raises an error).
+4. **Harder checks to fool** (C): the checks were written next to the mutations, so results are
+   optimistic. Options: someone other than the injector's author writes or reviews checks; make
+   mutations noisier (e.g. vary the wording of advice and forward-looking claims); add an intent
+   classifier for I1 / I5 instead of the rule.
+5. **Risk score** (C): better weights than suite severity (single-signal modes such as I4, O3
+   and S2 rank below multi-flag runs at K = 5%); a trained scorer stays out of scope for v1.
+6. **Rare modes** (A, B): C4, S3, D6, S1, O2, O5 have only a handful of runs per split at the
+   placeholder rates. Raise exposure (more leveraged / foreign holders, more sell and tax
+   questions) if per-mode results are to be reported.
+7. **Dashboard** (`dashboard/`): move from placeholder data to `report.json` and `flags.csv`.
 
 ## Definition of done for the dataset
-- About 750 households, ~180 market days, ~60 questions a day (`config/default.yaml`).
-- Every run has a trace and a label; the same seed gives identical output.
-- All 30 failure modes have a mutation (or are explicitly out of scope) and a label.
-- The date split is fixed before any checks are tuned.
+- [x] About 750 households, ~180 market days, ~60 questions a day (`config/default.yaml`).
+- [x] Every run has a trace and a label; the same seed gives identical output
+  (`tests/integration/test_determinism.py`).
+- [x] All 30 failure modes have a mutation and a label (each is tested to change its run).
+- [x] The date and household splits are fixed before any checks are tuned (checks were tuned on
+  train; the test split was used only for the report).
+- [ ] Failure rates and severity confirmed (placeholders now).
