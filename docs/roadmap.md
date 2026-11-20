@@ -1,6 +1,6 @@
 # Roadmap: what is done, what is left, who does what
 
-Last updated 2026-11-19. Decisions behind the finished work are in `decisions.md`; unresolved
+Last updated 2026-11-20. Decisions behind the finished work are in `decisions.md`; unresolved
 questions are in `open_questions.md`.
 
 ## Status
@@ -8,14 +8,16 @@ questions are in `open_questions.md`.
 | Piece | Where | Status |
 |---|---|---|
 | Trace schema (39 fields, 7 groups) and hidden `RunLabel` | `src/advisor_qa/schema/` | Done |
-| Test catalogue (30 failure modes D/C/I/O/S, scores) | `data/reference/test_catalogue.csv` | Scores done. `mapped_mutation` and `mapped_check` are empty. |
+| Test catalogue (30 failure modes D/C/I/O/S, scores) | `data/reference/test_catalogue.csv` | **Done** (scores; `mapped_mutation` and `mapped_check` filled) |
 | Households, accounts, holdings, instruments | `src/advisor_qa/world/`, `data/reference/instruments.csv` | **Done** (SCF sampler, fixture HH-004217, checks, build command) |
 | Calendar, market days, prices | `src/advisor_qa/world/prices.py`, `config/default.yaml` (`prices:`) | **Done** (synthetic prices, 180 trading days, fixture day pinned; spec in `price_simulator_spec.md`) |
-| Date split (train / validation / test) | `calendar.csv` from the price layer | Dates done (contiguous blocks, test last, each with at least 5 stress days). Household split not started. |
-| Ground-truth portfolio impact | `src/advisor_qa/truth/` | Empty |
-| Questions, mock tools, correct agent, clean traces | `src/advisor_qa/pipeline/` | Empty |
-| Error injection and hidden labels | `src/advisor_qa/inject/` | Empty |
-| Checks, risk score, evaluation at capacity K | not scaffolded | Not started |
+| Date split (train / validation / test) | `calendar.csv` from the price layer | **Done** (contiguous blocks, test last, each with at least 5 stress days) |
+| Household split | `src/advisor_qa/world/split.py`, `split_households.csv` | **Done** (60/20/20 seeded, fixture in train, diagonal with the date split) |
+| Ground-truth portfolio impact | `src/advisor_qa/truth/` | **Done** (`Truth.impact`; fixture -$21,700 from the price layer) |
+| Questions, mock tools, correct agent, clean traces | `src/advisor_qa/pipeline/` | **Done** (10 question kinds; provisional tools; `clean_run.json` is the generated fixture run) |
+| Error injection and hidden labels | `src/advisor_qa/inject/` | **Done** (all 30 modes; placeholder rates and severity) |
+| Run and label storage | `src/advisor_qa/store/` | **Done** (per-split JSONL, manifest) |
+| Checks, risk score, evaluation at capacity K | `src/advisor_qa/checks/`, `scoring/`, `eval/` | **Done, v1** (30 mapped checks, weighted sum, random vs risk at 5% / 10%) |
 | Dashboard | `dashboard/` | Prototype on placeholder data. Update once there are findings. |
 
 ## What the household layer gives you
@@ -39,43 +41,62 @@ Mutual funds publish the previous day's NAV all day (the D1 setup); `latent_valu
 enforces it). Without `--fred-dir` the bond yields are simulated. On the fixture day at 14:05 the
 latent values give HH-004217 a true impact of exactly -$21,700.
 
-## Agree these three interfaces first
-1. **Price table**: `instrument_id`, date (and time for intraday), price. Mutual funds have one NAV per day.
-2. **Truth function**: `impact(household, date, scope)` returns dollar and percent impact.
-3. **Runs and labels files**: one trace per run (nested, so JSONL is the likely format) and a
-   separate labels file keyed by `run_id`. Parquet is not usable on every machine (see README).
+## Run everything
+```
+uv run python -m advisor_qa.world.build --n 750 --out data/synthetic/households
+uv run python -m advisor_qa.world.prices --out data/synthetic/prices --fred-dir data/raw/fred
+uv run python -m advisor_qa.pipeline.generate --fred-dir data/raw/fred        # about 1 minute
+uv run python -m advisor_qa.eval.evaluate --split test                         # report.md
+```
+Use the same `--fred-dir` (or none) for prices and runs. `generate --rate-scale 0.2` gives about
+13% of runs an error instead of about 52% at the literal placeholder rates.
 
-## Proposed split (3 people)
+## Interfaces (settled 2026-11-20, see decisions.md)
+1. **Price table**: `instrument_id`, date (and time for intraday), price. Mutual funds have one NAV
+   per day. `PriceWorld` in Python; CSVs in `data/synthetic/prices/`.
+2. **Truth function**: `Truth.impact(household_id, as_of, scope, since=None)` returns dollars and
+   percent. `scope` is a list of account_ids; `since` gives week / month / year windows.
+3. **Runs and labels**: `runs/{split}.jsonl` (one `RunTrace` per line), `labels/{split}.jsonl`
+   (one `RunLabel` per line, keyed by `run_id`), `answers/{split}.jsonl`, `manifest.json`.
 
-### Person A: world and truth (dataset)
-- Calendar of market days, prices (real or synthetic, see open questions), the date split with no
-  date leakage between train, validation and test.
-- Ground-truth impact. Pass the fixture test: -$21,700 on the fixture day moves
-  (`tests/unit/test_fixture_household.py`).
-- Add a foreign instrument for D6; reuse households across days.
-- Inject the **data and calculation errors**: D1-D7 and C1-C7 (14 modes).
+## What the runs give you
+`advisor_qa.pipeline.generate` writes 10,800 runs (180 days x 60 questions) to
+`data/synthetic/runs/`. Each day's questions use households from the same split as the date. The
+fixture run (HH-004217, 2026-03-10 14:05) is always clean and equals `tests/fixtures/clean_run.json`.
+`advisor_qa.eval.evaluate` writes `report.md`, `report.json` and `flags.csv` per split to
+`data/synthetic/eval/`. First results (test split, decisions.md): at the literal placeholder
+rates about 52% of runs have an error and risk-based review catches about 1.9x as many as random;
+at `--rate-scale 0.2` (13%) it is 7.5x, close to the 7.6x ceiling. Read these as an upper bound
+(see "Known gaps" in open_questions.md).
 
-### Person B: agent and runs (dataset)
-- Question generator across intents, including the ambiguous ones.
-- Mock tools, the correct agent, clean traces (`tests/fixtures/clean_run.json` is the target shape).
-- Inject the **intent, overconfidence and security errors**: I1-I6, O1-O6, S1-S4 (16 modes).
-  Write the hidden `RunLabel` for every injected error.
-- Run assembler (runs file plus labels file) and the determinism test
-  (`tests/integration/test_determinism.py`, currently skipped).
-- If B is overloaded, move S1-S4 to A.
+## What is left
+Roughly in order. Owners follow the original split: A (world and truth), B (agent and runs),
+C (checks and evaluation).
 
-### Person C: checks (QA layer)
-- Deterministic checks that read a trace only, mapped to the test catalogue (fill `mapped_check`).
-- Risk score: a weighted sum of check flags, as a swappable scorer.
-- Evaluation: at capacity K (5% and 10% by default), compare random review with risk-based review
-  and report which errors land in the reviewed set.
-- Can start now using `tests/fixtures/clean_run.json` and hand-built broken traces. Tune on real
-  runs once B delivers them.
-- **Hard rule:** checks and scoring never import `advisor_qa.schema.labels`. Only the evaluation
-  step compares flags with labels. Add a test that enforces this.
+1. **Answers from Lopa (LPL)**: tool inventory and "wrong tool" (B), whether there is a target
+   error rate for `rate_scale` (A, B), and whether the firm shows intraday indicative NAVs (A).
+   Each is a config or small code change once answered.
+2. **Failure rates and severity** (A, B): replace the placeholders; then regenerate and re-run
+   the evaluation.
+3. **Independent tests for the truth function** (A): hand-calculated cases (leveraged ETF, foreign
+   holding, a week-to-date window), and decide what `as_of` on a weekend or holiday should do
+   (today it raises an error).
+4. **Harder checks to fool** (C): the checks were written next to the mutations, so results are
+   optimistic. Options: someone other than the injector's author writes or reviews checks; make
+   mutations noisier (e.g. vary the wording of advice and forward-looking claims); add an intent
+   classifier for I1 / I5 instead of the rule.
+5. **Risk score** (C): better weights than suite severity (single-signal modes such as I4, O3
+   and S2 rank below multi-flag runs at K = 5%); a trained scorer stays out of scope for v1.
+6. **Rare modes** (A, B): C4, S3, D6, S1, O2, O5 have only a handful of runs per split at the
+   placeholder rates. Raise exposure (more leveraged / foreign holders, more sell and tax
+   questions) if per-mode results are to be reported.
+7. **Dashboard** (`dashboard/`): move from placeholder data to `report.json` and `flags.csv`.
 
 ## Definition of done for the dataset
-- About 750 households, ~180 market days, ~60 questions a day (`config/default.yaml`).
-- Every run has a trace and a label; the same seed gives identical output.
-- All 30 failure modes have a mutation (or are explicitly out of scope) and a label.
-- The date split is fixed before any checks are tuned.
+- [x] About 750 households, ~180 market days, ~60 questions a day (`config/default.yaml`).
+- [x] Every run has a trace and a label; the same seed gives identical output
+  (`tests/integration/test_determinism.py`).
+- [x] All 30 failure modes have a mutation and a label (each is tested to change its run).
+- [x] The date and household splits are fixed before any checks are tuned (checks were tuned on
+  train; the test split was used only for the report).
+- [ ] Failure rates and severity confirmed (placeholders now).

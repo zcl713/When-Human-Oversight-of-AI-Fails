@@ -5,7 +5,7 @@
 | `reference/` | Hand-entered tables: instrument archetypes, test catalogue | yes |
 | `raw/` | Downloaded source data (SCF, prices, FRED) | no |
 | `interim/` | Cleaned intermediate data | no |
-| `synthetic/` | Generated tables: household CSVs, synthetic price CSVs; runs and labels files later (format open) | no |
+| `synthetic/` | Generated: household CSVs, synthetic price CSVs, runs (per-split JSONL traces, answers, labels), evaluation reports | no |
 
 Licence terms for each source are listed below. No real client data anywhere.
 
@@ -16,7 +16,7 @@ Licence terms for each source are listed below. No real client data anywhere.
   DOI 10.17016/8799.1. Extract (Excel/CSV): https://www.federalreserve.gov/econres/files/scfp2025excel.zip
   Variable definitions: https://www.federalreserve.gov/econres/files/bulletin.macro.txt
 - The source page states no redistribution terms, so the raw file is **not** committed. Put
-  `SCFP2025.xlsx` in `data/raw/` or pass `--scf-path` / set `SCF_PATH`.
+  `SCFP2025.csv` (what the zip contains as of 2026-11) or `SCFP2025.xlsx` in `data/raw/` or pass `--scf-path` / set `SCF_PATH`.
 - 21,800 records for 4,360 families (5 implicates each). `WGT` is per record and sums to the US family
   population. Households are drawn from records with FIN in $250K-$5M and at least $100K of modelled
   holdings (1,160 families, 5,377 records).
@@ -42,8 +42,14 @@ choices or assumptions, marked in `config/default.yaml` (`prices:`). Every price
 `#` notice line, so read it with `pd.read_csv(path, comment="#")` or
 `advisor_qa.world.prices.read_price_table`.
 
+### Runs (synthetic)
+`advisor_qa.pipeline.generate` writes `data/synthetic/runs/`: `runs/`, `answers/` and `labels/`
+(one JSONL file per split; labels are evaluation-only), `split_households.csv`, `directory.csv`
+(CRM directory with made-up client names) and `manifest.json`. Layout: `advisor_qa/store/runs.py`.
+
 ### What is generated, not SCF
 Advisors, account IDs, security-level holdings, ETF vs mutual-fund split, options/leveraged ETF
-holders, `in_crm` flags and the fixture household HH-004217. See `config/default.yaml` (`households:`)
+holders, the synthetic foreign-listed holding `SYN-JPEQ` (not a real security), client names,
+same-day cash flows, `in_crm` flags and the fixture household HH-004217. See `config/default.yaml` (`households:`)
 and `data/reference/instruments.csv` (`reference_price` is a nominal price, not a quote; each row's `notes`
 say what was checked against public factsheets on 2026-11-13 and what was not).

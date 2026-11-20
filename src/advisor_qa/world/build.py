@@ -1,6 +1,7 @@
 """Build the household tables.
 
-`uv run python -m advisor_qa.world.build --n 50 --out data/synthetic/v0 --scf-path <SCFP2025.xlsx>`
+`uv run python -m advisor_qa.world.build --n 50 --out data/synthetic/v0 --scf-path <SCFP2025.csv>`
+(`.xlsx` also works.)
 """
 
 import argparse
@@ -17,6 +18,14 @@ from advisor_qa.world.households import generate_world
 from advisor_qa.world.instruments import load_instruments
 from advisor_qa.world.params import REPO_ROOT, load_config
 from advisor_qa.world.scf import eligible_pool, load_scf
+from advisor_qa.world.split import SPLIT_FILE, assign_households, load_split_params
+
+
+def _default_scf_path() -> Path:
+    """data/raw/SCFP2025.csv if present, else data/raw/SCFP2025.xlsx."""
+    raw = REPO_ROOT / "data" / "raw"
+    csv = raw / "SCFP2025.csv"
+    return csv if csv.exists() else raw / "SCFP2025.xlsx"
 
 
 def main() -> None:
@@ -26,7 +35,7 @@ def main() -> None:
     ap.add_argument(
         "--scf-path",
         type=Path,
-        default=Path(os.environ.get("SCF_PATH", REPO_ROOT / "data" / "raw" / "SCFP2025.xlsx")),
+        default=Path(os.environ.get("SCF_PATH", _default_scf_path())),
     )
     ap.add_argument(
         "--etf-share", type=float, default=None, help="override etf_share_of_fund_dollars"
@@ -47,6 +56,9 @@ def main() -> None:
     print(f"eligible pool: {len(pool)} records, {pool['YY1'].nunique()} families")
     world = generate_world(pool, load_instruments(), params, args.n, seed)
     world.write(args.out)
+    split = assign_households(list(world.households["household_id"]), seed, load_split_params())
+    split.to_csv(args.out / SPLIT_FILE, index=False)
+    print("household split:", split["split"].value_counts().sort_index().to_dict())
 
     problems = check_integrity(world) + check_holdings_sum(world)
     print("checks:", "PASS" if not problems else problems)

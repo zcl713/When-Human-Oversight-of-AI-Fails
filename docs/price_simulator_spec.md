@@ -130,11 +130,11 @@ Add these under `tests/unit/test_prices.py`. The module is done when all pass an
 
 Version 1 leaves these to the error injectors and later work, but the layer leaves room for them:
 
-- **D4 corporate action.** An empty `events.csv` (`instrument_id`, `market_date`, `type`, `ratio`) that the injector fills. The price path stays unadjusted; the injector decides what the agent sees.
-- **D7 conflicting price sources.** The injector can add a second published price with noise. Nothing is stored for it in v1.
-- **D6 foreign holding.** Needs an instrument with its own trading hours and calendar. `instruments.csv` has none yet, so a foreign instrument has to be added first.
+- **D4 corporate action.** An empty `events.csv` (`instrument_id`, `market_date`, `type`, `ratio`). The D4 injector (2026-11-20) applies the split directly to the price tool's output and does not fill this file; it is still an unused hook.
+- **D7 conflicting price sources.** The injector prices one ETF from a second vendor with noise, in the tool output. Nothing is stored in the price layer.
+- **D6 foreign holding.** Added 2026-11-20: `INS-22` (`SYN-JPEQ`, synthetic, `pricing = foreign_close`). During US hours the published price is the home close, stamped 01:00 New York time (taken as the previous US-close value); the latent value keeps moving with the US market (beta 0.7).
 - **Fund distributions.** Ignored. NAVs have no ex-dividend drops.
-- **C3 same-day cash flows.** Not a price issue; it belongs to the household and truth layers.
+- **C3 same-day cash flows.** Not a price issue. The mock positions tool draws a same-day flow for 5% of household-days (`pipeline.same_day_flow_rate`).
 - **Real data later.** If a licensed source clears, it only has to produce the same four files. Nothing else in the pipeline changes.
 
 ## 8. Design decisions

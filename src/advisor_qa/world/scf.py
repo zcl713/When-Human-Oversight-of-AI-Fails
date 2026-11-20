@@ -22,11 +22,15 @@ SCF_COLUMNS = [
 MODELLED = ["STOCKS", "NMMF", "BOND", "CDS", "LIQ", "IRAKH", "THRIFT", "TRUSTS"]
 
 
-def load_scf(xlsx_path: Path, cache_path: Path) -> pd.DataFrame:
-    """Reads the extract (CSV cache in the interim data; the .xlsx takes about a minute)."""
+def load_scf(scf_path: Path, cache_path: Path) -> pd.DataFrame:
+    """Reads the extract, .csv or .xlsx (CSV cache in the interim data; the .xlsx takes about a
+    minute). The Fed's zip has shipped either format."""
     if cache_path.exists():
         return pd.read_csv(cache_path)
-    df = pd.read_excel(xlsx_path, usecols=SCF_COLUMNS)
+    if scf_path.suffix.lower() == ".csv":
+        df = pd.read_csv(scf_path, usecols=SCF_COLUMNS)
+    else:
+        df = pd.read_excel(scf_path, usecols=SCF_COLUMNS)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(cache_path, index=False)
     return df

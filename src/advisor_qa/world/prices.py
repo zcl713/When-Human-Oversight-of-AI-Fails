@@ -54,6 +54,7 @@ class PriceWorld:
     closes: dict[str, np.ndarray]  # length n + 1; index 0 is the pre-window day
     paths: dict[str, np.ndarray]  # (n + 1, len(times)); row 0 (pre-window day) is NaN
     yield_source: str  # "fred" or "simulated"
+    home_close: str = "01:00"  # foreign series: New York time of the home-market close
 
     def grid_keys(self) -> tuple[list[str], list[str]]:
         """(market_date, time) for every window day and grid time, day-major, as written in the
@@ -107,10 +108,16 @@ class PriceWorld:
 
     def published_price(self, series_id: str, ts: datetime | str) -> tuple[float, datetime]:
         """(price, price_as_of) a tool would show at ts. ETFs: the latent value at the grid
-        time. Mutual funds: the previous trading day's NAV, as of 16:00 that day."""
+        time. Mutual funds: the previous trading day's NAV, as of 16:00 that day. Foreign
+        listings: the home close, taken as the previous US-close value and stamped at the home
+        close time on the day (the fair value keeps moving during US hours)."""
         s = self._get(series_id)
         i, j = self.locate(ts)
         days = self.calendar.all_days
+        if s.foreign:
+            if i == 0:
+                raise ValueError(f"no home close before {days[1]}")
+            return float(self.closes[series_id][i - 1]), _ts(days[i], self.home_close)
         if not s.is_mutual_fund:
             return self._value(series_id, i, j), _ts(days[i], self.times[j])
         if i == 0:
@@ -184,7 +191,15 @@ def build_prices(
         closes[s.series_id], paths[s.series_id] = _anchor(
             comps.series_path(s), anchor_index, s.reference_price
         )
-    return PriceWorld(cal, daily.spec.series, grid_times(cfg), closes, paths, daily.yields.source)
+    return PriceWorld(
+        cal,
+        daily.spec.series,
+        grid_times(cfg),
+        closes,
+        paths,
+        daily.yields.source,
+        cfg.foreign_home_close_time,
+    )
 
 
 def _close_stamp(d: date | str, hhmm: str = "16:00") -> str:
@@ -220,6 +235,9 @@ def published_frame(w: PriceWorld) -> pd.DataFrame:
         if s.is_mutual_fund:
             price = np.repeat(w.closes[s.series_id][:-1], n_grid)
             as_of = [t for t in prev_close for _ in range(n_grid)]
+        elif s.foreign:
+            price = np.repeat(w.closes[s.series_id][:-1], n_grid)
+            as_of = [_close_stamp(d, w.home_close) for d in w.calendar.days for _ in range(n_grid)]
         else:
             price = np.asarray(w.paths[s.series_id][1:]).ravel()
             as_of = times

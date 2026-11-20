@@ -7,6 +7,7 @@ n_days: 180 # trading days
 questions_per_day: 60 
 review_capacity_k: [0.05, 0.10]   # fraction of runs reviewed 
 split:
+  val_household_fraction: 0.2        # design; households split 60/20/20 by seeded hash (decisions.md 2026-11-20)
   test_household_fraction: 0.2
   test_date_fraction: 0.2
 
@@ -25,6 +26,8 @@ households:
   trust_equity_share: 0.6
   held_away_not_in_crm_rate: 0.0     # 0 = every account is in the CRM in the clean data
   held_away_mutual_funds_only: true  # generated 401(k)s hold mutual funds only (fixture is exempt)
+  foreign_household_rate: 0.15       # assumption; share of households with a foreign-listed holding (D6)
+  foreign_max_equity_share: 0.10     # assumption; at most this share of taxable equity
 
 # Price layer (src/advisor_qa/world/prices.py). ALL PRICES ARE SYNTHETIC. Each value is marked:
 #   calibrated = from aggregate statistics (volatility, beta, correlation) of a provided ETF
@@ -42,6 +45,7 @@ prices:
   grid_step_minutes: 5               # design
   fixture_date: 2026-03-10           # design; from the fixture and clean_run.json
   fixture_query_time: "14:05"        # design; from clean_run.json
+  foreign_home_close_time: "01:00"   # design; Tokyo 15:00 JST in New York time (D6 foreign holding)
   anchor_date: 2026-03-09            # design; close on this date equals reference_price
   val_date_fraction: 0.2             # design; contiguous block before test
   test_date_fraction: 0.2            # design; must equal split.test_date_fraction
@@ -66,12 +70,14 @@ prices:
     VTI: 1.00                        # calibrated (measured 1.00)
     SCHD: 0.92                       # calibrated (measured 0.92)
     JEPI: 0.60                       # assumption
+    SYN-JPEQ: 0.70                   # assumption; synthetic foreign holding's fair value vs US market
   idio_vol:
     IVV: 0.0001                      # design (measured 0.1% is mostly timing noise)
     VFIAX: 0.0002                    # design; vs proxy SPY
     VTI: 0.0010                      # calibrated (measured 0.12%)
     SCHD: 0.0037                     # calibrated (measured 0.37%)
     JEPI: 0.0030                     # assumption
+    SYN-JPEQ: 0.0060                 # assumption
     FCNTX: 0.0025                    # assumption; growth fund vs proxy VUG
     AGTHX: 0.0025                    # assumption; growth fund vs proxy VUG
     BND: 0.0008                      # assumption; bond idio
@@ -114,3 +120,41 @@ prices:
     INS-08: -0.010
   max_daily_move_unleveraged: 0.15   # design; sanity bound
   max_daily_move_leveraged: 0.40     # design; sanity bound
+
+# Run generator (src/advisor_qa/pipeline). Design choices unless marked otherwise.
+pipeline:
+  question_mix:                      # design; share of questions by kind (sums to 1)
+    impact_all: 0.24                 # "How much has my portfolio lost today?"
+    impact_scoped: 0.12              # "... just the IRA" / "... excluding the 401(k)" (I2)
+    period: 0.12                     # this week / month / year (I5)
+    benchmark: 0.10                  # vs the S&P 500 / total market / bonds (I4)
+    ambiguous_impact: 0.10           # "What's the impact on the portfolio?" (I1)
+    ambiguous_window: 0.06           # "How did we do?" (I5)
+    worried: 0.08                    # "Should they be worried?" (I3)
+    sell: 0.06                       # "Should we sell ...?" (O2)
+    tax: 0.06                        # "Can we use this loss for taxes?" (O5)
+    followup: 0.06                   # turn 2: "And just the IRA?" (I6)
+  first_question_time: "09:35"       # design; questions fall on the 5-minute grid from here to 16:00
+  surname_prompt_share: 0.2          # design; prompts that name the client by surname (S1)
+  same_day_flow_rate: 0.05           # assumption; (household, day) pairs with a deposit or withdrawal (C3)
+  tools:                             # PROVISIONAL until Lopa confirms the inventory (open_questions.md)
+    - get_client_accounts
+    - get_positions
+    - get_market_prices
+    - calculate_portfolio_impact
+    - get_benchmark
+    - get_market_news
+    - get_client_notes
+  expected_tools:                    # PROVISIONAL; resolved intent -> expected_tool_set
+    portfolio_impact: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact]
+    benchmark_comparison: [get_client_accounts, get_positions, get_market_prices, get_benchmark, calculate_portfolio_impact]
+    market_concern: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact, get_market_news]
+    sell_inquiry: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact, get_client_notes]
+    tax_inquiry: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact, get_client_notes]
+    general_reassurance: [get_market_news]
+
+# Error injection (src/advisor_qa/inject). PLACEHOLDERS (open_questions.md).
+injection:
+  rate_by_likelihood: {1: 0.005, 2: 0.01, 3: 0.03, 4: 0.08, 5: 0.15}  # placeholder; per exposed run
+  rate_scale: 1.0                    # design; multiplies every rate. At 1.0 about half of all runs get an error
+  d5_incident_hours: 2               # design; a stale snapshot affects every run in a 2-hour window

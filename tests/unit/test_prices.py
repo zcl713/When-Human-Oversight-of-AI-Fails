@@ -214,7 +214,7 @@ def test_proxy_series_ids() -> None:
     _, p = load_price_config()
     ids = [s.series_id for s in _all((0, p), None).spec.series]
     assert ids[-2:] == ["PROXY-MUB", "PROXY-VUG"]
-    assert ids[:21] == list(load_instruments()["instrument_id"])
+    assert ids[:-2] == list(load_instruments()["instrument_id"])
     assert not any(i in ids for i in ("PROXY-SPY", "PROXY-BND", "PROXY-BSV"))
 
 
@@ -295,7 +295,7 @@ def test_money_market_is_one_dollar(world: PriceWorld) -> None:
 
 def test_etf_published_equals_latent(world: PriceWorld) -> None:
     for s in world.series:
-        if not s.is_mutual_fund:
+        if not s.is_mutual_fund and not s.foreign:
             ts = "2026-03-10T11:17:42"
             price, as_of = world.published_price(s.series_id, ts)
             assert price == world.latent_value(s.series_id, ts)
@@ -424,7 +424,7 @@ def test_csv_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, world: Price
     pub = read_price_table(tmp_path / "prices_published.csv").set_index(["instrument_id", "time"])
     lat = read_price_table(tmp_path / "prices_latent.csv").set_index(["instrument_id", "time"])
     daily = read_price_table(tmp_path / "prices_daily.csv")
-    assert len(pub) == len(lat) == 23 * 180 * 79 and len(daily) == 23 * 180
+    assert len(pub) == len(lat) == 24 * 180 * 79 and len(daily) == 24 * 180
     key = ("INS-05", "2026-03-10T14:05:00")
     assert pub.loc[key, "price"] == 100.0 and pub.loc[key, "price_as_of"] == "2026-03-09T16:00:00"
     assert lat.loc[key, "value"] == world.latent_value(*key) == 98.5
@@ -518,3 +518,13 @@ def test_published_price_never_returns_latent_for_funds(world: PriceWorld) -> No
                 latent = world.latent_value(s.series_id, ts)
                 if latent != world.prior_close(s.series_id, d):
                     assert world.published_price(s.series_id, ts)[0] != latent
+
+
+def test_foreign_listing_publishes_home_close(world: PriceWorld) -> None:
+    """D6 setup: during US hours the feed shows the home close (stamped 01:00 New York time)
+    while the fair value moves with the US market."""
+    s = next(s for s in world.series if s.foreign)
+    price, as_of = world.published_price(s.series_id, "2026-03-10T14:05:00")
+    assert as_of == datetime(2026, 3, 10, 1, 0)
+    assert price == world.prior_close(s.series_id, "2026-03-10")
+    assert world.latent_value(s.series_id, "2026-03-10T14:05:00") != price

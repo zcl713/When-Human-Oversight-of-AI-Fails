@@ -23,6 +23,8 @@ class HouseholdParams(BaseModel):
     trust_equity_share: float = 0.6
     held_away_not_in_crm_rate: float = 0.0
     held_away_mutual_funds_only: bool = True
+    foreign_household_rate: float = 0.15
+    foreign_max_equity_share: float = 0.10
 
 
 def load_config(path: Path = DEFAULT_CONFIG) -> tuple[int, HouseholdParams]:

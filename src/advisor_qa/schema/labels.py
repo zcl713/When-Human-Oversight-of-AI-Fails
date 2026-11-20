@@ -15,7 +15,7 @@ class RunLabel(BaseModel):
     error_present: bool
     error_type: list[FailureModeId]
     root_cause_id: str | None  # shared id for incidents such as a stale snapshot (snowball)
-    severity: float  # TODO(stage 4): suite severity score plus dollar error; formula not fixed
+    severity: float  # PLACEHOLDER formula (inject/plan.py); the real one is an open question
 
     @model_validator(mode="after")
     def _error_present_matches_types(self) -> Self:

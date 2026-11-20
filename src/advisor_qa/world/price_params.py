@@ -38,6 +38,7 @@ class PriceParams(BaseModel):
     grid_step_minutes: int = 5
     fixture_date: date = date(2026, 3, 10)
     fixture_query_time: str = "14:05"
+    foreign_home_close_time: str = "01:00"  # New York time of the home-market close (D6)
     anchor_date: date = date(2026, 3, 9)
     # Date split
     val_date_fraction: float = 0.2

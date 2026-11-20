@@ -60,6 +60,7 @@ class Series:
     leveraged: bool
     reference_price: float
     loadings: Loadings
+    foreign: bool = False  # listed abroad: the feed shows the home close during US hours (D6)
 
 
 @dataclass(frozen=True)
@@ -163,6 +164,7 @@ def build_spec(inst: pd.DataFrame, p: PriceParams) -> ModelSpec:
             leveraged=str(r["ticker"]) in p.leverage,
             reference_price=float(r["reference_price"]),
             loadings=b.for_ticker(str(r["ticker"])),
+            foreign=str(r["pricing"]) == "foreign_close",
         )
         for _, r in inst.iterrows()
     ]
