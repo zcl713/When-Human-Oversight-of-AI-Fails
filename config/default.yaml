@@ -120,3 +120,41 @@ prices:
     INS-08: -0.010
   max_daily_move_unleveraged: 0.15   # design; sanity bound
   max_daily_move_leveraged: 0.40     # design; sanity bound
+
+# Run generator (src/advisor_qa/pipeline). Design choices unless marked otherwise.
+pipeline:
+  question_mix:                      # design; share of questions by kind (sums to 1)
+    impact_all: 0.24                 # "How much has my portfolio lost today?"
+    impact_scoped: 0.12              # "... just the IRA" / "... excluding the 401(k)" (I2)
+    period: 0.12                     # this week / month / year (I5)
+    benchmark: 0.10                  # vs the S&P 500 / total market / bonds (I4)
+    ambiguous_impact: 0.10           # "What's the impact on the portfolio?" (I1)
+    ambiguous_window: 0.06           # "How did we do?" (I5)
+    worried: 0.08                    # "Should they be worried?" (I3)
+    sell: 0.06                       # "Should we sell ...?" (O2)
+    tax: 0.06                        # "Can we use this loss for taxes?" (O5)
+    followup: 0.06                   # turn 2: "And just the IRA?" (I6)
+  first_question_time: "09:35"       # design; questions fall on the 5-minute grid from here to 16:00
+  surname_prompt_share: 0.2          # design; prompts that name the client by surname (S1)
+  same_day_flow_rate: 0.05           # assumption; (household, day) pairs with a deposit or withdrawal (C3)
+  tools:                             # PROVISIONAL until Lopa confirms the inventory (open_questions.md)
+    - get_client_accounts
+    - get_positions
+    - get_market_prices
+    - calculate_portfolio_impact
+    - get_benchmark
+    - get_market_news
+    - get_client_notes
+  expected_tools:                    # PROVISIONAL; resolved intent -> expected_tool_set
+    portfolio_impact: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact]
+    benchmark_comparison: [get_client_accounts, get_positions, get_market_prices, get_benchmark, calculate_portfolio_impact]
+    market_concern: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact, get_market_news]
+    sell_inquiry: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact, get_client_notes]
+    tax_inquiry: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact, get_client_notes]
+    general_reassurance: [get_market_news]
+
+# Error injection (src/advisor_qa/inject). PLACEHOLDERS (open_questions.md).
+injection:
+  rate_by_likelihood: {1: 0.005, 2: 0.01, 3: 0.03, 4: 0.08, 5: 0.15}  # placeholder; per exposed run
+  rate_scale: 1.0                    # design; multiplies every rate. At 1.0 about half of all runs get an error
+  d5_incident_hours: 2               # design; a stale snapshot affects every run in a 2-hour window

@@ -58,10 +58,15 @@ def test_clean_run_json_matches_fixture() -> None:
         trace.household_id == fx.FIXTURE_HOUSEHOLD_ID and trace.advisor_id == fx.FIXTURE_ADVISOR_ID
     )
     assert [(h.account_id, h.instrument_id, h.qty) for h in trace.holdings] == fx.FIXTURE_HOLDINGS
+    # Holding.price is the price used at the run time; the base is the value at the prior close,
+    # which is the reference price on the fixture day (the anchor date is the day before).
+    start = trace.inputs["start_prices"]
     for h in trace.holdings:
-        assert h.price == inst.loc[h.instrument_id, "reference_price"]
+        assert start[h.instrument_id] == inst.loc[h.instrument_id, "reference_price"]
+        assert h.price == pytest.approx(start[h.instrument_id] * (1 + DAY_MOVES[h.instrument_id]))
         assert h.instrument_type == inst.loc[h.instrument_id, "instrument_type"]
-    assert sum(h.qty * h.price for h in trace.holdings) == trace.base == 1_200_000
+    assert sum(h.qty * start[h.instrument_id] for h in trace.holdings) == trace.base == 1_200_000
+    assert trace.numbers_claimed == [-21_700, -1.8]
     want = ["taxable", "ira", "401k_held_away"]
     assert sorted(set(acct_type.values())) == sorted(want) == sorted(trace.accounts_in_crm)
 
