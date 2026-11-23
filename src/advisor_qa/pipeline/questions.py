@@ -36,9 +36,13 @@ INTENT_OF_KIND = {
     "worried": "market_concern",
     "sell": "sell_inquiry",
     "tax": "tax_inquiry",
+    "rates": "rates_impact",
+    "inception": "portfolio_performance",
 }
 AMBIGUOUS_KINDS = {"ambiguous_impact", "ambiguous_window", "worried"}
 FIXTURE_PROMPT = "How much has my portfolio lost today?"
+WORKBOOK_PROMPT = "What's the impact on my portfolio from today's market?"  # client test suite
+MIX = "MIX"  # benchmark not named ("vs. the market"): the right one depends on the client's mix
 
 
 @dataclass(frozen=True)
@@ -53,10 +57,11 @@ class Question:
     intent: str  # true intent
     scope_types: tuple[str, ...]  # account types truly asked about
     window: str  # intraday, wtd, mtd, ytd
-    benchmark: str | None  # benchmark instrument ticker, if asked
+    benchmark: str | None  # ticker the prompt names, MIX for "the market", None if not asked
     product: str | None  # instrument_id named in a sell question
     names_client: bool  # the prompt names the client by surname
     pinned_clean: bool = False  # the fixture run: never injected
+    prior_scope: tuple[str, ...] = ()  # follow-ups: the scope set in the earlier turn
 
 
 def run_id_for(seed: int, day: date, k: int) -> str:
@@ -135,6 +140,7 @@ class QuestionGenerator:
         names = rng.random() < self.p.surname_prompt_share
         client = f"the {surname(self.dir.name_of[h])} household" if names else "this client"
         scope, window, bench, product, turn = tuple(types), "intraday", None, None, 1
+        prior: tuple[str, ...] = ()
         if kind in ("impact_scoped", "followup") and len(types) < 2:
             kind = "impact_all"  # nothing to scope
         if kind == "impact_all":
@@ -156,10 +162,14 @@ class QuestionGenerator:
             window = _pick(rng, ["wtd", "mtd", "ytd"])
             prompt = f"How has {client} done {WINDOW_PHRASE[window]}?"
         elif kind == "benchmark":
-            bench = _pick(rng, ["SPY", "VTI", "BND"])
-            prompt = f"How did {client} do versus {BENCHMARK_PHRASE[bench]} today?"
+            bench = _pick(rng, [MIX, MIX, "SPY", "VTI", "BND"])
+            if bench == MIX:  # the workbook's I4 prompt
+                prompt = f"How did {client} do versus the market today?"
+            else:
+                prompt = f"How did {client} do versus {BENCHMARK_PHRASE[bench]} today?"
         elif kind == "ambiguous_impact":
             prompt = _pick(rng, [
+                WORKBOOK_PROMPT,
                 f"What's the impact on {client}'s portfolio?",
                 f"What's the impact for {client}?",
             ])  # fmt: skip
@@ -181,14 +191,33 @@ class QuestionGenerator:
                 prompt = f"Should we sell {client}'s {self.ticker[product]} after today's drop?"
         elif kind == "tax":
             prompt = f"Can {client} use today's loss for taxes?"
-        else:  # followup: second turn after "How is ... doing today?"
+        elif kind == "rates":  # C7 setup: the yield move is reported in basis points
+            prompt = f"What does the rate move mean for {client}?"
+        elif kind == "inception":  # O4 setup: history before 2019 is missing
+            window = "ytd"
+            prompt = f"What's {client}'s return since they started?"
+        else:  # followup (I6): turn 1 was scoped to one account; turn 3 asks for the total
             t_ = _pick(rng, types)
-            scope, turn = (t_,), 2
-            prompt = f"And just the {ACCOUNT_LABEL[t_]}?"
+            prior, turn = (t_,), 3
+            prompt = "And the total?"
             names = False
+        names = names and client in prompt  # some templates do not name the client
         ts = datetime.fromisoformat(f"{d}T{t}:00")
         intent = INTENT_OF_KIND[kind]
         adv = self.dir.advisor_of[h]
         return Question(
-            run_id, kind, h, adv, ts, prompt, turn, intent, scope, window, bench, product, names
+            run_id,
+            kind,
+            h,
+            adv,
+            ts,
+            prompt,
+            turn,
+            intent,
+            scope,
+            window,
+            bench,
+            product,
+            names,
+            prior_scope=prior,
         )

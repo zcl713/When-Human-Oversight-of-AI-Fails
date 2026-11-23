@@ -1,16 +1,19 @@
 """Mock tools backed by the synthetic household and price data. SYNTHETIC PRICES.
 
-PROVISIONAL inventory (config `pipeline.tools`) until the real one is confirmed. Every tool is a
-pure function of its arguments and the world, so the same seed gives the same outputs and hashes.
+The inventory is ours (the client workbook has none; decisions.md 2026-11-23). It is modelled on a
+typical advisor platform and is listed in config `pipeline.tools`. Every tool is a pure function
+of its arguments and the world, so the same seed gives the same outputs and hashes.
 
-Pricing (decisions.md, 2026-11-20): `get_market_prices` returns, per instrument,
-- US-listed ETFs: the published intraday price (source `feed`)
-- mutual funds: the firm's intraday indicative NAV (source `indicative_nav`), i.e. the true value;
-  the official NAV is still the previous day's (what D1 substitutes)
-- the money-market fund: its stable $1.00 NAV (source `stable_nav`)
-- foreign listings: a fair value (source `fair_value`); the feed's home close is what D6
-  substitutes
-Indicative and fair values are estimates until the 16:00 strike, so a correct answer says so.
+Pricing follows the client workbook (D1: funds are "priced once daily"; O6: "intraday value is
+modeled, not observed"):
+- US-listed ETFs: `get_quotes` returns the live price.
+- Mutual funds: `get_fund_navs` returns the official NAV, which is yesterday's close, plus an
+  intraday *estimate* from a proxy (the fund's proxy ETF, or for target-date funds their published
+  equity/bond mix). The estimate is not the true value; the gap is tracking error.
+- The money-market fund: a stable $1.00 NAV.
+- The foreign holding: `get_quotes` returns the home-market close (market closed, FX at the last
+  close) plus a fair-value estimate from the US market move.
+A correct answer uses the estimates, says they are estimates, and names the method.
 """
 
 from collections.abc import Sequence
@@ -20,10 +23,40 @@ from typing import Any
 
 import pandas as pd
 
+from advisor_qa.world.price_params import PriceParams
 from advisor_qa.world.prices import PriceWorld
 from advisor_qa.world.streams import stream
 
-ESTIMATE_SOURCES = {"indicative_nav", "fair_value"}
+ESTIMATE_SOURCES = {"proxy_estimate", "fair_value_estimate"}
+HISTORY_STARTS = date(2019, 1, 2)  # transaction history before this is missing (O4 setup)
+
+# instrument_id -> [(proxy series id, weight)]; the estimate moves by sum(weight x proxy return)
+EstimateRules = dict[str, list[tuple[str, float]]]
+
+
+def estimate_rules(instruments: pd.DataFrame, p: PriceParams) -> EstimateRules:
+    """How the platform estimates what it cannot observe intraday. Uses only public facts: each
+    fund's proxy ETF, target-date funds' published equity weight, and an assumed beta of the
+    foreign holding to the US market."""
+    inst = instruments.set_index("instrument_id")
+    by_ticker = {str(t): str(i) for i, t in inst["ticker"].items()}
+    spy, bnd = by_ticker[p.market_ticker], by_ticker[p.target_date_bond_ticker]
+    out: EstimateRules = {}
+    for ins, r in inst.iterrows():
+        ins = str(ins)
+        if r["pricing"] == "foreign_close":
+            out[ins] = [(spy, p.betas[str(r["ticker"])])]
+        elif not bool(r["is_mutual_fund"]):
+            continue
+        elif r["instrument_type"] == "money_market_fund":
+            out[ins] = []
+        elif r["instrument_type"] == "target_date_fund":
+            w = p.target_date_equity_weight[str(r["ticker"])]
+            out[ins] = [(spy, w), (bnd, 1 - w)]
+        else:
+            proxy = str(r["proxy_ticker"])
+            out[ins] = [(by_ticker.get(proxy, f"PROXY-{proxy}"), 1.0)]
+    return out
 
 
 @dataclass(frozen=True)
@@ -47,10 +80,13 @@ class World:
         prices: PriceWorld,
         seed: int,
         flow_rate: float,
+        rules: EstimateRules,
+        directory: Any = None,  # pipeline.directory.Directory (set by the generator)
     ) -> None:
         self.households, self.accounts, self.holdings = households, accounts, holdings
         self.instruments = instruments.set_index("instrument_id")
-        self.prices, self.seed, self.flow_rate = prices, seed, flow_rate
+        self.prices, self.seed, self.flow_rate, self.rules = prices, seed, flow_rate, rules
+        self.directory = directory
         self.series = {s.series_id: s for s in prices.series}
         self._acc = {str(h): g for h, g in accounts.groupby("household_id")}
         self._pos: dict[str, list[Position]] = {}
@@ -73,7 +109,13 @@ class World:
         return list(self._pos.get(household_id, []))
 
     def ticker(self, instrument_id: str) -> str:
-        return str(self.instruments.loc[instrument_id, "ticker"])
+        if instrument_id in self.instruments.index:
+            return str(self.instruments.loc[instrument_id, "ticker"])
+        return instrument_id.removeprefix("PROXY-")
+
+    def duration(self, instrument_id: str) -> float:
+        d = pd.to_numeric(self.instruments["duration_years"], errors="coerce").fillna(0.0)
+        return float(d.to_dict()[instrument_id])
 
     def kind(self, instrument_id: str) -> str:
         """etf, fund, money_market or foreign: how the instrument is priced."""
@@ -96,6 +138,25 @@ class World:
         acc = str(own["account_id"].iloc[int(rng.integers(len(own)))])
         return acc, round(amount if sign < 0.5 else -amount, 2)
 
+    def estimate(self, instrument_id: str, as_of: datetime, official: float) -> float:
+        """The platform's intraday estimate: official price x (1 + weighted proxy return today)."""
+        p, d = self.prices, as_of.date()
+        move = sum(
+            w * (p.published_price(s, as_of)[0] / p.prior_close(s, d) - 1)
+            for s, w in self.rules[instrument_id]
+        )
+        return round(official * (1 + move), 6)
+
+    def method(self, instrument_id: str) -> str:
+        rule = self.rules[instrument_id]
+        if self.kind(instrument_id) == "foreign":
+            return f"home close x (1 + {rule[0][1]:.2f} x {self.ticker(rule[0][0])} move today)"
+        if not rule:
+            return "stable $1.00 NAV"
+        if len(rule) == 1:
+            return f"proxy {self.ticker(rule[0][0])}"
+        return " + ".join(f"{w:.2f} x {self.ticker(s)}" for s, w in rule)
+
 
 def _ts(x: datetime) -> str:
     return x.isoformat()
@@ -107,8 +168,37 @@ class Tools:
     def __init__(self, world: World, as_of: datetime) -> None:
         self.w, self.as_of = world, as_of
 
-    def get_client_accounts(self, household_id: str) -> dict[str, Any]:
-        """Accounts in the CRM, with their value at the prior close (pre-flow, as booked)."""
+    # --- clients and accounts ---------------------------------------------------------------------
+
+    def search_clients(self, name: str) -> dict[str, Any]:
+        d = self.w.directory
+        matches = [
+            {"household_id": h, "client_name": n, "advisor_id": d.advisor_of[h]}
+            for h, n in sorted(d.name_of.items())
+            if n.split()[-1] == name
+        ]
+        return {"query": name, "matches": matches}
+
+    def get_client_profile(self, household_id: str) -> dict[str, Any]:
+        rng = stream(self.w.seed, "client_profile", household_id)
+        pool = [
+            "Prefers a phone call before any trade.",
+            "Planning to retire within ten years.",
+            "Asked to keep cash for a home renovation.",
+            "Tax documents are handled by an outside accountant.",
+            "Comfortable with market swings; long horizon.",
+        ]
+        picks = sorted(rng.choice(len(pool), size=2, replace=False))
+        risk = ["conservative", "moderate", "growth"][int(rng.integers(3))]
+        return {
+            "household_id": household_id,
+            "risk_tolerance": risk,
+            "client_since": f"{int(rng.integers(2008, 2019))}-01-01",
+            "notes": [pool[int(k)] for k in picks],
+        }
+
+    def get_accounts(self, household_id: str) -> dict[str, Any]:
+        """Accounts in the CRM, with their booked value at the prior close (before any flow)."""
         a = self.w.account_table(household_id)
         d = self.as_of.date()
         flow = self.w.flow_today(household_id, d)
@@ -128,17 +218,18 @@ class Tools:
                     "account_id": str(r.account_id),
                     "type": str(r.type),
                     "held_away": bool(r.held_away),
-                    "crm_value": round(value, 2),
+                    "booked_value": round(value, 2),
                 }
             )
         return {"household_id": household_id, "accounts": out}
 
-    def get_positions(self, household_id: str) -> dict[str, Any]:
-        d = self.as_of.date()
-        flow = self.w.flow_today(household_id, d)
+    def _positions(
+        self, household_id: str, account_ids: Sequence[str], snap: str
+    ) -> dict[str, Any]:
         types = sorted(set(self.w.account_table(household_id)["type"]))
+        wanted = set(account_ids)
         return {
-            "snapshot_id": f"snap-{d.isoformat()}-{self.as_of:%H%M}",
+            "snapshot_id": snap,
             "accounts_in_feed": types,
             "positions": [
                 {
@@ -149,43 +240,94 @@ class Tools:
                     "qty": p.qty,
                 }
                 for p in self.w.positions(household_id)
+                if p.account_id in wanted
             ],
-            "cash_flows_today": (
-                [{"account_id": flow[0], "amount": flow[1]}] if flow is not None else []
-            ),
         }
 
-    def price(self, instrument_id: str, start_day: date) -> dict[str, Any]:
-        p, kind = self.w.prices, self.w.kind(instrument_id)
-        start = p.prior_close(instrument_id, start_day)
-        if kind == "etf":
-            px, as_of = p.published_price(instrument_id, self.as_of)
-            return {"price": px, "as_of": _ts(as_of), "source": "feed", "start_price": start}
+    def get_positions(self, household_id: str, account_ids: Sequence[str]) -> dict[str, Any]:
+        """Current positions from the custodian feed."""
+        snap = f"snap-{self.as_of.date().isoformat()}-{self.as_of:%H%M}"
+        return self._positions(household_id, account_ids, snap)
+
+    def get_eod_positions(self, household_id: str, account_ids: Sequence[str]) -> dict[str, Any]:
+        """Last night's end-of-day snapshot (a plausible wrong choice for an intraday question)."""
+        days = self.w.prices.calendar.all_days
+        prev = days[days.index(self.as_of.date()) - 1]
+        return self._positions(household_id, account_ids, f"snap-{prev.isoformat()}-1600")
+
+    def get_transactions(
+        self, household_id: str, account_ids: Sequence[str], since: date
+    ) -> dict[str, Any]:
+        flow = self.w.flow_today(household_id, self.as_of.date())
+        tx = []
+        if flow is not None and flow[0] in set(account_ids):
+            kind = "deposit" if flow[1] > 0 else "withdrawal"
+            tx.append({"account_id": flow[0], "type": kind, "amount": flow[1],
+                       "date": self.as_of.date().isoformat()})  # fmt: skip
+        return {"since": since.isoformat(), "transactions": tx}
+
+    # --- prices -------------------------------------------------------------------------------
+
+    def get_quotes(self, instrument_ids: Sequence[str], start_day: date) -> dict[str, Any]:
+        """ETFs: live price. Foreign listings: home close (market closed) and a fair value."""
+        p, out = self.w.prices, {}
+        for ins in sorted(set(instrument_ids)):
+            px, as_of = p.published_price(ins, self.as_of)
+            q: dict[str, Any] = {"price": px, "as_of": _ts(as_of),
+                                 "start_price": p.prior_close(ins, start_day)}  # fmt: skip
+            if self.w.kind(ins) == "foreign":
+                q.update(
+                    market_status="closed",
+                    fx_rate_as_of=_ts(as_of),
+                    fair_value_estimate=self.w.estimate(ins, self.as_of, px),
+                    fair_value_method=self.w.method(ins),
+                )
+            out[ins] = q
+        return {"as_of": _ts(self.as_of), "quotes": out}
+
+    def get_fund_navs(self, instrument_ids: Sequence[str], start_day: date) -> dict[str, Any]:
+        """Official NAV (yesterday's close) and the intraday estimate with its method."""
+        p, out = self.w.prices, {}
+        for ins in sorted(set(instrument_ids)):
+            nav, nav_as_of = p.published_price(ins, self.as_of)
+            out[ins] = {
+                "nav": nav,
+                "nav_as_of": _ts(nav_as_of),
+                "estimate": self.w.estimate(ins, self.as_of, nav),
+                "estimate_as_of": _ts(self._snapped()),
+                "estimate_method": self.w.method(ins),
+                "start_price": p.prior_close(ins, start_day),
+            }
+        return {"as_of": _ts(self.as_of), "funds": out}
+
+    def _snapped(self) -> datetime:
+        p = self.w.prices
         i, j = p.locate(self.as_of)
-        snapped = datetime.fromisoformat(f"{p.calendar.all_days[i]}T{p.times[j]}:00")
-        source = {"fund": "indicative_nav", "money_market": "stable_nav", "foreign": "fair_value"}
-        return {
-            "price": p.latent_value(instrument_id, self.as_of),
-            "as_of": _ts(snapped),
-            "source": source[kind],
-            "start_price": start,
-        }
+        return datetime.fromisoformat(f"{p.calendar.all_days[i]}T{p.times[j]}:00")
 
-    def get_market_prices(self, instrument_ids: Sequence[str], start_day: date) -> dict[str, Any]:
-        return {
-            "as_of": _ts(self.as_of),
-            "prices": {i: self.price(i, start_day) for i in sorted(set(instrument_ids))},
-        }
+    def get_corporate_actions(self, instrument_ids: Sequence[str]) -> dict[str, Any]:
+        return {"date": self.as_of.date().isoformat(), "actions": []}
 
-    def get_benchmark(self, ticker: str, start_day: date) -> dict[str, Any]:
-        ins = str(self.w.instruments.index[self.w.instruments["ticker"] == ticker][0])
-        px, as_of = self.w.prices.published_price(ins, self.as_of)
-        start = self.w.prices.prior_close(ins, start_day)
-        return {
-            "index": ticker,
-            "as_of": _ts(as_of),
-            "return_pct": round(100 * (px / start - 1), 4),
-        }
+    # --- performance and context --------------------------------------------------------------
+
+    def get_inception_performance(self, household_id: str) -> dict[str, Any]:
+        since = self.get_client_profile(household_id)["client_since"]
+        return {"period": "inception", "client_since": since, "status": "incomplete",
+                "history_starts": HISTORY_STARTS.isoformat(), "return_pct": None}  # fmt: skip
+
+    def get_benchmark_returns(self, index: str, start_day: date) -> dict[str, Any]:
+        """index is a ticker ('SPY') or a blend ('SPY60/BND40')."""
+        parts = [(index, 1.0)] if "/" not in index else [
+            (x.rstrip("0123456789"), int(x[len(x.rstrip("0123456789")):]) / 100)
+            for x in index.split("/")
+        ]  # fmt: skip
+        inst = self.w.instruments
+        ret = 0.0
+        for ticker, w in parts:
+            ins = str(inst.index[inst["ticker"] == ticker][0])
+            px, _ = self.w.prices.published_price(ins, self.as_of)
+            ret += w * (px / self.w.prices.prior_close(ins, start_day) - 1)
+        return {"index": index, "as_of": _ts(self.as_of), "return_pct": round(100 * ret, 4)}
 
     def get_market_news(self) -> dict[str, Any]:
         d = self.as_of.date()
@@ -198,17 +340,18 @@ class Tools:
         )
         return {"date": d.isoformat(), "headlines": heads}
 
-    def get_client_notes(self, household_id: str) -> dict[str, Any]:
-        rng = stream(self.w.seed, "client_notes", household_id)
-        pool = [
-            "Prefers a phone call before any trade.",
-            "Planning to retire within ten years.",
-            "Asked to keep cash for a home renovation.",
-            "Tax documents are handled by an outside accountant.",
-            "Comfortable with market swings; long horizon.",
-        ]
-        picks = sorted(rng.choice(len(pool), size=2, replace=False))
-        return {"household_id": household_id, "notes": [pool[int(k)] for k in picks]}
+    def get_treasury_yields(self) -> dict[str, Any]:
+        """The previous trading day's change in the 10-year Treasury yield."""
+        days = self.w.prices.calendar.all_days
+        i = days.index(self.as_of.date())
+        change = self.w.prices.yield_change_10y[i - 1] if i >= 2 else 0.0
+        bps = round(change * 1e4, 1)
+        return {"date": days[i - 1].isoformat(), "ust10y_change_bps": bps,
+                "ust10y_change_pct": round(bps / 100, 4)}  # fmt: skip
+
+    def draft_client_email(self, household_id: str, body: str) -> dict[str, Any]:
+        """Write action: drafts an email for the advisor to review (not used by a correct run)."""
+        return {"household_id": household_id, "status": "drafted", "chars": len(body)}
 
 
 def calculate_portfolio_impact(
@@ -216,8 +359,9 @@ def calculate_portfolio_impact(
     net_flows_today: float = 0.0,
     benchmark_pct: float | None = None,
 ) -> dict[str, Any]:
-    """The calculation tool: impact from qty, price and start price per holding. Same-day flows
-    are excluded (the positions are post-flow, so qty x price change already ignores them)."""
+    """Impact from qty, price and start price per holding. Used by `calculate_portfolio_impact`
+    (today) and `get_performance` (week, month, year). Flows are excluded: the positions are
+    post-flow, so qty x price change already ignores them."""
     by_holding: dict[str, float] = {}
     base = current = 0.0
     for h in holdings:

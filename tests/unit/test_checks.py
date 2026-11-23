@@ -51,12 +51,17 @@ def _broken(clean: RunTrace, how: str) -> RunTrace:
     elif how == "base_reconciliation":
         t.base = t.base * 1.05
     elif how == "percent_scale":
-        t.number_to_tool_output_links[1] = NumberLink(number="-0.02%", source=None)
+        t.intermediate_values["ust10y_change_bps"] = 25.0
+        t.number_to_tool_output_links.append(NumberLink(number="25%", source=None))
     elif how == "stale_snapshot":
         t.data_snapshot_id = "snap-2026-03-05-1600"
     elif how == "unexpected_tool":
-        t.tool_calls.append(ToolCall(tool_name="send_email", args={}, status="ok",
+        t.tool_calls.append(ToolCall(tool_name="draft_client_email", args={}, status="ok",
                                      latency_ms=1.0, output_hash="0" * 12))  # fmt: skip
+    elif how == "note_injection":
+        t.certainty_and_advice_phrases = ["portfolio is safe", "no action is needed"]
+    elif how == "calc_tool_mismatch":
+        t.time_window = "mtd"
     elif how == "advice":
         t.certainty_and_advice_phrases = ["i'd recommend"]
     elif how == "unlabelled_estimate":
@@ -74,7 +79,8 @@ def _broken(clean: RunTrace, how: str) -> RunTrace:
     "check",
     ["stale_fund_nav", "account_coverage", "tool_failure", "price_source", "base_reconciliation",
      "percent_scale", "stale_snapshot", "unexpected_tool", "advice", "unlabelled_estimate",
-     "unassigned_access", "implausible_move", "mixed_timestamps"],
+     "unassigned_access", "implausible_move", "mixed_timestamps", "note_injection",
+     "calc_tool_mismatch"],
 )  # fmt: skip
 def test_hand_broken_trace_fires_its_check(
     clean: RunTrace, directory: CrmDirectory, check: str
@@ -166,5 +172,5 @@ def test_evaluate_risk_beats_random_on_a_toy_split() -> None:
 
 def test_support_checks_are_unmapped() -> None:
     assert SUPPORT == {"ambiguous_surname", "llm_calculation", "missing_expected_tool",
-                       "missing_disclosure"}  # fmt: skip
+                       "missing_disclosure", "unexpected_tool", "pct_consistency"}  # fmt: skip
     assert sorted(MAPPED) == sorted(m.id for m in MODES)

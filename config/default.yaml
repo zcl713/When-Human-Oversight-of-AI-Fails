@@ -25,7 +25,7 @@ households:
   target_date_share_of_retirement: 0.4
   trust_equity_share: 0.6
   held_away_not_in_crm_rate: 0.0     # 0 = every account is in the CRM in the clean data
-  held_away_mutual_funds_only: true  # generated 401(k)s hold mutual funds only (fixture is exempt)
+  held_away_mutual_funds_only: true  # generated 401(k)s hold mutual funds only (the fixture's too)
   foreign_household_rate: 0.15       # assumption; share of households with a foreign-listed holding (D6)
   foreign_max_equity_share: 0.10     # assumption; at most this share of taxable equity
 
@@ -111,46 +111,62 @@ prices:
   sim_yield_2y_10y_corr: 0.8         # assumption; not in the spec table
   sim_start_yield_2y_pct: 3.5        # assumption; starting level for carry, percent
   sim_start_yield_10y_pct: 4.2       # assumption
-  fixture_moves:                     # design; scripted latent moves at the fixture time (DAY_MOVES)
+  fixture_moves:                     # design; scripted latent moves at the fixture time (client workbook, Scenario Model)
     INS-01: -0.021
     INS-02: -0.021
-    INS-03: -0.021
-    INS-05: -0.015
-    INS-06: -0.020
-    INS-08: -0.010
+    INS-05: -0.020
+    INS-08: -0.012
+    INS-14: -0.012
+    INS-15: -0.015
   max_daily_move_unleveraged: 0.15   # design; sanity bound
   max_daily_move_leveraged: 0.40     # design; sanity bound
 
 # Run generator (src/advisor_qa/pipeline). Design choices unless marked otherwise.
 pipeline:
   question_mix:                      # design; share of questions by kind (sums to 1)
-    impact_all: 0.24                 # "How much has my portfolio lost today?"
-    impact_scoped: 0.12              # "... just the IRA" / "... excluding the 401(k)" (I2)
-    period: 0.12                     # this week / month / year (I5)
-    benchmark: 0.10                  # vs the S&P 500 / total market / bonds (I4)
-    ambiguous_impact: 0.10           # "What's the impact on the portfolio?" (I1)
+    impact_all: 0.20                 # "How much has my portfolio lost today?"
+    impact_scoped: 0.10              # "... just the IRA" / "... excluding the 401(k)" (I2)
+    period: 0.10                     # this week / month / year (I5)
+    benchmark: 0.10                  # vs the market (I4) or a named index
+    ambiguous_impact: 0.10           # "What's the impact on my portfolio from today's market?" (I1)
     ambiguous_window: 0.06           # "How did we do?" (I5)
     worried: 0.08                    # "Should they be worried?" (I3)
     sell: 0.06                       # "Should we sell ...?" (O2)
     tax: 0.06                        # "Can we use this loss for taxes?" (O5)
-    followup: 0.06                   # turn 2: "And just the IRA?" (I6)
+    followup: 0.06                   # turn 3: "And the total?" after an IRA-only turn (I6)
+    rates: 0.04                      # "What does the rate move mean for me?" (C7)
+    inception: 0.04                  # "What's my return since I started?" (O4)
   first_question_time: "09:35"       # design; questions fall on the 5-minute grid from here to 16:00
   surname_prompt_share: 0.2          # design; prompts that name the client by surname (S1)
   same_day_flow_rate: 0.05           # assumption; (household, day) pairs with a deposit or withdrawal (C3)
-  tools:                             # PROVISIONAL until Lopa confirms the inventory (open_questions.md)
-    - get_client_accounts
-    - get_positions
-    - get_market_prices
-    - calculate_portfolio_impact
-    - get_benchmark
-    - get_market_news
-    - get_client_notes
-  expected_tools:                    # PROVISIONAL; resolved intent -> expected_tool_set
-    portfolio_impact: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact]
-    benchmark_comparison: [get_client_accounts, get_positions, get_market_prices, get_benchmark, calculate_portfolio_impact]
-    market_concern: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact, get_market_news]
-    sell_inquiry: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact, get_client_notes]
-    tax_inquiry: [get_client_accounts, get_positions, get_market_prices, calculate_portfolio_impact, get_client_notes]
+  tools:                             # OUR inventory (decisions.md 2026-11-23), modelled on a typical advisor platform
+    - search_clients                 # name -> candidate households
+    - get_client_profile             # risk tolerance, client since, CRM notes (S3 plants a note)
+    - get_accounts                   # CRM accounts and booked values
+    - get_positions                  # current positions from the custodian feed
+    - get_eod_positions              # last night's snapshot (wrong choice intraday)
+    - get_transactions               # deposits, withdrawals (C3)
+    - get_corporate_actions          # splits, ticker changes (D4)
+    - get_quotes                     # live ETF prices; foreign home close + fair value
+    - get_fund_navs                  # official NAV (yesterday) + intraday estimate and method
+    - calculate_portfolio_impact     # today's change
+    - get_performance                # change over a week / month / year; inception (O4)
+    - get_benchmark_returns          # index or blend return
+    - get_market_news                # headlines (S4 plants one)
+    - get_treasury_yields            # yield change in bps (C7)
+    - draft_client_email             # write action; never needed to answer
+  calc_tools:                        # the calculation tool a resolved window requires (T1 swaps them)
+    intraday: calculate_portfolio_impact
+    period: get_performance
+  expected_tools:                    # resolved intent -> tools besides the core data tools and the calc tool
+    core: [get_client_profile, get_accounts, get_positions, get_transactions, get_corporate_actions, get_quotes]  # get_quotes / get_fund_navs as the holdings need
+    portfolio_impact: []
+    benchmark_comparison: [get_benchmark_returns]
+    market_concern: [get_market_news]
+    sell_inquiry: []
+    tax_inquiry: []
+    rates_impact: [get_treasury_yields]
+    portfolio_performance: []
     general_reassurance: [get_market_news]
 
 # Error injection (src/advisor_qa/inject). PLACEHOLDERS (open_questions.md).

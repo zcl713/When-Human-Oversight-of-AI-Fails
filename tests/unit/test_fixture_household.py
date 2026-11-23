@@ -10,13 +10,14 @@ from advisor_qa.world.households import fixture_tables
 from advisor_qa.world.instruments import load_instruments
 
 # Day moves from the hand-off, by instrument. Price data, so they live in the test, not the tables.
+# From the client workbook's Scenario Model sheet.
 DAY_MOVES = {
-    "INS-01": -0.021,  # ETF
-    "INS-05": -0.015,  # mutual fund
-    "INS-08": -0.010,  # bond fund (duration case)
-    "INS-02": -0.021,  # ETF
-    "INS-06": -0.020,  # mutual fund
-    "INS-03": -0.021,  # ETF, held away
+    "INS-01": -0.021,  # large-cap equity ETF
+    "INS-05": -0.020,  # growth mutual fund
+    "INS-08": -0.012,  # intermediate bond ETF (duration case)
+    "INS-02": -0.021,  # equity index ETF
+    "INS-14": -0.012,  # balanced mutual fund (2030 target date)
+    "INS-15": -0.015,  # target-date fund, held away
 }
 CLEAN_RUN = Path(__file__).parent.parent / "fixtures" / "clean_run.json"
 
@@ -41,10 +42,7 @@ def test_fixture_accounts_and_instrument_flags() -> None:
     assert t.households["advisor_id"].iloc[0] == "ADV-0382"
     assert t.holdings[t.holdings["account_id"] == "ACC-88122"]["value_usd"].iloc[0] == 100_000
     mutual_funds = {i for i in DAY_MOVES if inst.loc[i, "is_mutual_fund"]}
-    assert {DAY_MOVES[i] for i in mutual_funds} == {
-        -0.015,
-        -0.020,
-    }  # only these two are mutual funds
+    assert mutual_funds == {"INS-05", "INS-14", "INS-15"}  # the workbook's three EOD-NAV funds
     assert inst.loc["INS-08", "instrument_type"] == "bond_fund"
     assert check_integrity(t) == [] and check_holdings_sum(t) == []
 
@@ -59,14 +57,21 @@ def test_clean_run_json_matches_fixture() -> None:
     )
     assert [(h.account_id, h.instrument_id, h.qty) for h in trace.holdings] == fx.FIXTURE_HOLDINGS
     # Holding.price is the price used at the run time; the base is the value at the prior close,
-    # which is the reference price on the fixture day (the anchor date is the day before).
+    # which is the reference price on the fixture day (the anchor date is the day before). ETFs
+    # show the true move; funds are estimated from proxies (priced once a day).
     start = trace.inputs["start_prices"]
     for h in trace.holdings:
         assert start[h.instrument_id] == inst.loc[h.instrument_id, "reference_price"]
-        assert h.price == pytest.approx(start[h.instrument_id] * (1 + DAY_MOVES[h.instrument_id]))
+        if h.price_source == "feed":
+            move = DAY_MOVES[h.instrument_id]
+            assert h.price == pytest.approx(start[h.instrument_id] * (1 + move))
+        else:
+            assert (
+                h.price_source == "proxy_estimate" and inst.loc[h.instrument_id, "is_mutual_fund"]
+            )
         assert h.instrument_type == inst.loc[h.instrument_id, "instrument_type"]
     assert sum(h.qty * start[h.instrument_id] for h in trace.holdings) == trace.base == 1_200_000
-    assert trace.numbers_claimed == [-21_700, -1.8]
+    assert trace.estimate_label and trace.numbers_claimed[2] == 1_200_000
     want = ["taxable", "ira", "401k_held_away"]
     assert sorted(set(acct_type.values())) == sorted(want) == sorted(trace.accounts_in_crm)
 
@@ -87,7 +92,7 @@ def test_truth_function_reproduces_fixture_from_price_layer() -> None:
     assert got.dollars == pytest.approx(-21_700, abs=0.01)
     assert got.base == pytest.approx(1_200_000, abs=0.01)
     assert round(got.pct, 1) == -1.8
-    # scope is explicit: dropping the held-away 401(k) drops its -$2,100
+    # scope is explicit: dropping the held-away 401(k) drops its -$1,500
     no_401k = truth.impact(hh, "2026-03-10T14:05:00", ["ACC-88120", "ACC-88121"])
-    assert no_401k.dollars == pytest.approx(-19_600, abs=0.01)
-    assert no_401k.pct == pytest.approx(-19_600 / 1_100_000 * 100, abs=1e-6)
+    assert no_401k.dollars == pytest.approx(-20_200, abs=0.01)
+    assert no_401k.pct == pytest.approx(-20_200 / 1_100_000 * 100, abs=1e-6)

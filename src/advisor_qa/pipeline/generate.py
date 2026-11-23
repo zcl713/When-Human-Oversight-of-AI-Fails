@@ -15,6 +15,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from advisor_qa.inject.plan import Injector, dollar_error, load_catalogue, make_label
@@ -22,7 +23,7 @@ from advisor_qa.pipeline.agent import Agent, RunResult
 from advisor_qa.pipeline.directory import Directory, build_directory
 from advisor_qa.pipeline.params import InjectionParams, PipelineParams, load_pipeline_config
 from advisor_qa.pipeline.questions import QuestionGenerator
-from advisor_qa.pipeline.tools import World
+from advisor_qa.pipeline.tools import ESTIMATE_SOURCES, World, estimate_rules
 from advisor_qa.schema.labels import RunLabel
 from advisor_qa.schema.trace import RunTrace
 from advisor_qa.store.labels import write_labels
@@ -38,7 +39,7 @@ from advisor_qa.store.runs import (
 from advisor_qa.truth.impact import Truth
 from advisor_qa.world.instruments import load_instruments
 from advisor_qa.world.params import DEFAULT_CONFIG, REPO_ROOT
-from advisor_qa.world.price_params import load_price_config
+from advisor_qa.world.price_params import PriceParams, load_price_config
 from advisor_qa.world.prices import PriceWorld, build_prices
 from advisor_qa.world.split import assign_households, load_split_params
 
@@ -48,7 +49,9 @@ class Dataset:
     runs: dict[str, list[RunTrace]] = field(default_factory=lambda: defaultdict(list))
     answers: dict[str, list[tuple[str, str]]] = field(default_factory=lambda: defaultdict(list))
     labels: dict[str, list[RunLabel]] = field(default_factory=lambda: defaultdict(list))
-    clean_errors: list[tuple[str, float]] = field(default_factory=list)  # should stay empty
+    # clean runs: (run_id, |answer - truth|, base). Only estimated holdings may cause an error.
+    clean_errors: list[tuple[str, float, float]] = field(default_factory=list)
+    unexplained: list[tuple[str, float]] = field(default_factory=list)  # must stay empty
     split: pd.DataFrame | None = None
     directory: Directory | None = None
 
@@ -64,13 +67,14 @@ def generate(
     seed: int,
     split: pd.DataFrame | None = None,
     max_days: int | None = None,
+    price_params: PriceParams | None = None,
 ) -> Dataset:
     if split is None:
         split = assign_households(list(households["household_id"]), seed, load_split_params())
-    world = World(
-        households, accounts, holdings, instruments, prices, seed, pipe.same_day_flow_rate
-    )
+    pp = price_params or load_price_config()[1]
     directory = build_directory(households, seed)
+    world = World(households, accounts, holdings, instruments, prices, seed,
+                  pipe.same_day_flow_rate, estimate_rules(instruments, pp), directory)  # fmt: skip
     questions = QuestionGenerator(accounts, holdings, instruments, directory, pipe, seed)
     agent = Agent(world, directory, pipe)
     catalogue = load_catalogue()
@@ -84,11 +88,13 @@ def generate(
         for q in questions.day(d, by_split[s], fixture_day=(i == cal.fixture_index)):
             planned = injector.plan(q)
             result: RunResult = agent.run(planned.question, planned.faults)
-            label = make_label(planned, result, truth, catalogue)
-            if not planned.modes:
-                err = dollar_error(planned.question, result, truth)
-                if err > 0:
-                    out.clean_errors.append((q.run_id, err))
+            clean = agent.run(planned.question) if planned.modes else result
+            label = make_label(planned, result, clean, catalogue)
+            err = dollar_error(planned.question, clean, truth)
+            out.clean_errors.append((q.run_id, err, clean.trace.base))
+            estimated = any(h.price_source in ESTIMATE_SOURCES for h in clean.trace.holdings)
+            if err > 0 and not estimated:
+                out.unexplained.append((q.run_id, err))
             out.runs[s].append(result.trace)
             out.answers[s].append((q.run_id, result.answer))
             out.labels[s].append(label)
@@ -139,10 +145,16 @@ def main() -> None:
     instruments = load_instruments()
     prices = build_prices(instruments, pp, price_seed, args.fred_dir)
     split = pd.read_csv(h / SPLIT_FILE) if (h / SPLIT_FILE).exists() else None
-    ds = generate(hh, acc, hold, instruments, prices, pipe, inj, seed, split, args.max_days)
-    if ds.clean_errors:
-        raise RuntimeError(f"clean runs disagree with the truth function: {ds.clean_errors[:5]}")
+    ds = generate(hh, acc, hold, instruments, prices, pipe, inj, seed, split, args.max_days, pp)
+    if ds.unexplained:
+        raise RuntimeError(f"clean runs without estimates disagree with the truth function: "
+                           f"{ds.unexplained[:5]}")  # fmt: skip
     write_dataset(ds, args.out, seed)
+    rel = [e / b for _, e, b in ds.clean_errors if b]
+    print(
+        f"correct answers vs truth (estimation error, % of base): median {np.median(rel):.3%}, "
+        f"95th percentile {np.percentile(rel, 95):.3%}, max {max(rel):.3%}"
+    )
     for s in SPLITS:
         n = len(ds.runs.get(s, []))
         e = sum(lb.error_present for lb in ds.labels.get(s, []))

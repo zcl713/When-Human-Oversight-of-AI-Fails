@@ -5,7 +5,7 @@ from enum import StrEnum
 
 class FailureModeId(StrEnum):
     """Test IDs from the client suite: data (D), calculation (C), intent (I), overconfidence (O),
-    security (S). TODO: "wrong tool" has no ID yet (undecided; the old prototype used T1)."""
+    security (S); plus the team-added T1 (wrong tool selected; not in the client workbook)."""
 
     D1 = "D1"
     D2 = "D2"
@@ -37,6 +37,7 @@ class FailureModeId(StrEnum):
     S2 = "S2"
     S3 = "S3"
     S4 = "S4"
+    T1 = "T1"
 
 
 class Source(StrEnum):

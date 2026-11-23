@@ -31,55 +31,115 @@
   "interpretation_restated": true,
   "tool_calls": [
     {
-      "tool_name": "get_client_accounts",
+      "tool_name": "get_client_profile",
       "args": {
         "household_id": "HH-004217"
       },
       "status": "ok",
-      "latency_ms": 148.5,
-      "output_hash": "2d2a82841d82"
+      "latency_ms": 136.2,
+      "output_hash": "becdf10a1f44"
+    },
+    {
+      "tool_name": "get_accounts",
+      "args": {
+        "household_id": "HH-004217"
+      },
+      "status": "ok",
+      "latency_ms": 90.9,
+      "output_hash": "73af8ad1db69"
     },
     {
       "tool_name": "get_positions",
       "args": {
-        "household_id": "HH-004217"
+        "household_id": "HH-004217",
+        "account_ids": [
+          "ACC-88120",
+          "ACC-88121",
+          "ACC-88122"
+        ]
       },
       "status": "ok",
-      "latency_ms": 159.1,
-      "output_hash": "d963e890c459"
+      "latency_ms": 179.4,
+      "output_hash": "6bfebf4c4713"
     },
     {
-      "tool_name": "get_market_prices",
+      "tool_name": "get_transactions",
+      "args": {
+        "household_id": "HH-004217",
+        "account_ids": [
+          "ACC-88120",
+          "ACC-88121",
+          "ACC-88122"
+        ],
+        "since": "2026-03-10"
+      },
+      "status": "ok",
+      "latency_ms": 148.2,
+      "output_hash": "34e9157314f6"
+    },
+    {
+      "tool_name": "get_corporate_actions",
+      "args": {
+        "instrument_ids": [
+          "INS-01",
+          "INS-02",
+          "INS-05",
+          "INS-08",
+          "INS-14",
+          "INS-15"
+        ]
+      },
+      "status": "ok",
+      "latency_ms": 78.6,
+      "output_hash": "ba0739efbea4"
+    },
+    {
+      "tool_name": "get_quotes",
       "args": {
         "as_of": "2026-03-10T14:05:00",
         "instrument_ids": [
           "INS-01",
           "INS-02",
-          "INS-03",
-          "INS-05",
-          "INS-06",
           "INS-08"
         ]
       },
       "status": "ok",
-      "latency_ms": 290.5,
-      "output_hash": "8c63cde17905"
+      "latency_ms": 113.9,
+      "output_hash": "04f8023047ad"
+    },
+    {
+      "tool_name": "get_fund_navs",
+      "args": {
+        "as_of": "2026-03-10T14:05:00",
+        "instrument_ids": [
+          "INS-05",
+          "INS-14",
+          "INS-15"
+        ]
+      },
+      "status": "ok",
+      "latency_ms": 254.3,
+      "output_hash": "167a989fd06f"
     },
     {
       "tool_name": "calculate_portfolio_impact",
       "args": {
         "holdings": 6,
-        "window": "intraday"
+        "period": "intraday"
       },
       "status": "ok",
-      "latency_ms": 47.6,
-      "output_hash": "ec4a829f005f"
+      "latency_ms": 63.4,
+      "output_hash": "1daf07aae8e6"
     }
   ],
   "expected_tool_set": [
-    "get_client_accounts",
+    "get_client_profile",
+    "get_accounts",
     "get_positions",
-    "get_market_prices",
+    "get_transactions",
+    "get_corporate_actions",
+    "get_quotes",
+    "get_fund_navs",
     "calculate_portfolio_impact"
   ],
   "holdings": [
@@ -96,22 +156,22 @@
       "account_id": "ACC-88120",
       "instrument_id": "INS-05",
       "qty": 2000.0,
-      "price": 98.5,
+      "price": 97.80894,
       "price_as_of": "2026-03-10T14:05:00",
-      "price_source": "indicative_nav",
+      "price_source": "proxy_estimate",
       "instrument_type": "mutual_fund"
     },
     {
-      "account_id": "ACC-88121",
+      "account_id": "ACC-88120",
       "instrument_id": "INS-08",
       "qty": 4000.0,
-      "price": 49.5,
+      "price": 49.4,
       "price_as_of": "2026-03-10T14:05:00",
       "price_source": "feed",
       "instrument_type": "bond_fund"
     },
     {
-      "account_id": "ACC-88120",
+      "account_id": "ACC-88121",
       "instrument_id": "INS-02",
       "qty": 500.0,
       "price": 293.7,
@@ -121,21 +181,21 @@
     },
     {
       "account_id": "ACC-88121",
-      "instrument_id": "INS-06",
-      "qty": 1000.0,
-      "price": 98.0,
+      "instrument_id": "INS-14",
+      "qty": 4000.0,
+      "price": 24.565,
       "price_as_of": "2026-03-10T14:05:00",
-      "price_source": "indicative_nav",
-      "instrument_type": "mutual_fund"
+      "price_source": "proxy_estimate",
+      "instrument_type": "target_date_fund"
     },
     {
       "account_id": "ACC-88122",
-      "instrument_id": "INS-03",
-      "qty": 1000.0,
-      "price": 97.9,
+      "instrument_id": "INS-15",
+      "qty": 2500.0,
+      "price": 39.25,
       "price_as_of": "2026-03-10T14:05:00",
-      "price_source": "feed",
-      "instrument_type": "equity_etf"
+      "price_source": "proxy_estimate",
+      "instrument_type": "target_date_fund"
     }
   ],
   "accounts_in_crm": [
@@ -156,8 +216,8 @@
       "INS-05": 100.0,
       "INS-08": 50.0,
       "INS-02": 300.0,
-      "INS-06": 100.0,
-      "INS-03": 100.0
+      "INS-14": 25.0,
+      "INS-15": 40.0
     },
     "window_start": "2026-03-10",
     "net_flows_today": 0
@@ -169,26 +229,36 @@
     "covered_value": 1200000.0,
     "by_holding": {
       "ACC-88120/INS-01": -9450.0,
-      "ACC-88120/INS-05": -3000.0,
-      "ACC-88121/INS-08": -2000.0,
-      "ACC-88120/INS-02": -3150.0,
-      "ACC-88121/INS-06": -2000.0,
-      "ACC-88122/INS-03": -2100.0
+      "ACC-88120/INS-05": -4382.12,
+      "ACC-88120/INS-08": -2400.0,
+      "ACC-88121/INS-02": -3150.0,
+      "ACC-88121/INS-14": -1740.0,
+      "ACC-88122/INS-15": -1875.0
     },
-    "flows_excluded": true
+    "flows_excluded": true,
+    "estimate_methods": {
+      "INS-05": "proxy VUG",
+      "INS-14": "0.60 x SPY + 0.40 x BND",
+      "INS-15": "0.75 x SPY + 0.25 x BND"
+    }
   },
   "numbers_claimed": [
-    -21700.0,
-    -1.8
+    -22997.0,
+    -1.9,
+    1200000.0
   ],
   "number_to_tool_output_links": [
     {
-      "number": "-$21,700",
-      "source": "ec4a829f005f:dollar_impact"
+      "number": "-$22,997",
+      "source": "1daf07aae8e6:dollar_impact"
     },
     {
-      "number": "-1.8%",
-      "source": "ec4a829f005f:pct_impact"
+      "number": "-1.9%",
+      "source": "1daf07aae8e6:pct_impact"
+    },
+    {
+      "number": "$1,200,000",
+      "source": "1daf07aae8e6:base"
     }
   ],
   "certainty_and_advice_phrases": [],

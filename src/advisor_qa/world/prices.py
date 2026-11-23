@@ -30,6 +30,7 @@ from advisor_qa.world.market_calendar import STRESS, Calendar, build_calendar
 from advisor_qa.world.params import DEFAULT_CONFIG, REPO_ROOT
 from advisor_qa.world.price_model import MARKET, ModelSpec, Series, idio, simulate_daily
 from advisor_qa.world.price_params import PriceParams, load_price_config
+from advisor_qa.world.yields import TENOR_10Y
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ class PriceWorld:
     paths: dict[str, np.ndarray]  # (n + 1, len(times)); row 0 (pre-window day) is NaN
     yield_source: str  # "fred" or "simulated"
     home_close: str = "01:00"  # foreign series: New York time of the home-market close
+    yield_change_10y: tuple[float, ...] = ()  # daily 10-year yield change (decimal), per all_days
 
     def grid_keys(self) -> tuple[list[str], list[str]]:
         """(market_date, time) for every window day and grid time, day-major, as written in the
@@ -165,13 +167,21 @@ def pin_fixture(comps: ComponentPaths, spec: ModelSpec, cfg: PriceParams, cal: C
         else:
             rest_pins[sid] = move
     pinned_idio = {idio(sid) for sid in rest_pins}
-    for sid, move in rest_pins.items():
+
+    def depends(sid: str) -> int:  # how many other pinned idio terms the series loads on
+        return len((set(by_id[sid].loadings) - {idio(sid)}) & pinned_idio)
+
+    # Pin series that others load on first (e.g. BND before the target-date funds that blend it),
+    # so each pin sees the final paths of what it depends on.
+    for sid in sorted(rest_pins, key=lambda s: (depends(s), s)):
+        move = rest_pins[sid]
         loadings, own = by_id[sid].loadings, idio(sid)
         if own not in loadings:
             raise ValueError(f"{sid} cannot be pinned: it has no idio term of its own")
+        dependents = {d for d in rest_pins if d != sid and own in by_id[d].loadings}
+        if depends(sid) and dependents:
+            raise ValueError(f"{sid} both depends on and is a dependency of pinned series")
         others = {c: w for c, w in loadings.items() if c != own}
-        if set(others) & pinned_idio:
-            raise ValueError(f"{sid} loads on another pinned series' idio term")
         rest = sum(w * float(comps.paths[c][di, k]) for c, w in others.items())
         comps.pin(own, di, {k: (move - rest) / loadings[own]})
 
@@ -199,6 +209,7 @@ def build_prices(
         paths,
         daily.yields.source,
         cfg.foreign_home_close_time,
+        tuple(float(x) for x in daily.yields.change(TENOR_10Y)),
     )
 
 

@@ -9,8 +9,10 @@ Rates and the severity formula are PLACEHOLDERS (docs/open_questions.md):
   household, so they run alone; I3 skips the calculation, so only S4 can join it; O1 needs a data
   mode on the same run
 - severity = highest suite severity among the run's modes + log10(1 + dollar error), where the
-  dollar error is |first dollar figure in the answer - true impact of the question as asked|
-  (rounding to whole dollars is not an error). Clean runs have severity 0.
+  dollar error is |first dollar figure in the faulty answer - the same figure in the correct
+  answer to the same question|. The correct answer carries its own estimation error for funds and
+  closed foreign markets (truth is not observable intraday), so that baseline is subtracted: only
+  the error the fault adds counts. Clean runs have severity 0.
 """
 
 import math
@@ -141,6 +143,7 @@ class Injector:
 
 
 def dollar_error(q: Question, result: RunResult, truth: Truth) -> float:
+    """|answer - true impact| for the question as asked (beyond whole-dollar rounding)."""
     scope = [a for a in truth.all_accounts(q.household_id)
              if truth.accounts(q.household_id).set_index("account_id").loc[a, "type"]
              in q.scope_types]  # fmt: skip
@@ -150,8 +153,17 @@ def dollar_error(q: Question, result: RunResult, truth: Truth) -> float:
     return round(max(0.0, abs(claimed - true) - 0.5), 2)
 
 
-def make_label(p: Planned, result: RunResult, truth: Truth, catalogue: pd.DataFrame) -> RunLabel:
-    err = dollar_error(p.question, result, truth)
+def added_error(result: RunResult, clean: RunResult) -> float:
+    """Dollar error the faults add, relative to the correct answer to the same question."""
+    a = result.claimed_dollars if result.claimed_dollars is not None else 0.0
+    b = clean.claimed_dollars if clean.claimed_dollars is not None else 0.0
+    return round(abs(a - b), 2)
+
+
+def make_label(
+    p: Planned, result: RunResult, clean: RunResult, catalogue: pd.DataFrame
+) -> RunLabel:
+    err = added_error(result, clean)
     if not p.modes:
         severity = 0.0
     else:

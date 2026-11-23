@@ -10,7 +10,7 @@ from advisor_qa.pipeline.agent import Agent
 from advisor_qa.pipeline.directory import Directory, build_directory
 from advisor_qa.pipeline.params import InjectionParams, PipelineParams, load_pipeline_config
 from advisor_qa.pipeline.questions import QuestionGenerator
-from advisor_qa.pipeline.tools import World
+from advisor_qa.pipeline.tools import World, estimate_rules
 from advisor_qa.truth.impact import Truth
 from advisor_qa.world.households import WorldTables, generate_world
 from advisor_qa.world.instruments import load_instruments
@@ -44,13 +44,14 @@ class Kit:
         t = t or tables()
         seed, pipe, inj = config()
         self.seed, self.pipe, self.inj, self.t = seed, pipe, inj, t
-        self.world = World(t.households, t.accounts, t.holdings, t.instruments, prices(), seed,
-                           pipe.same_day_flow_rate)  # fmt: skip
         self.directory: Directory = build_directory(t.households, seed)
         # several households share a surname, some across advisors (S1 needs a collision)
         for h in self.households()[1:6]:
             first = self.directory.name_of[h].split()[0]
             self.directory.name_of[h] = f"{first} Garcia"
+        rules = estimate_rules(t.instruments, load_price_config()[1])
+        self.world = World(t.households, t.accounts, t.holdings, t.instruments, prices(), seed,
+                           pipe.same_day_flow_rate, rules, self.directory)  # fmt: skip
         self.questions = QuestionGenerator(t.accounts, t.holdings, t.instruments, self.directory,
                                            pipe, seed)  # fmt: skip
         self.agent = Agent(self.world, self.directory, pipe)

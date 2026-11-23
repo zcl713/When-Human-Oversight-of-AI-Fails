@@ -13,5 +13,5 @@ def test_clean_run_parses_and_round_trips() -> None:
 
     assert trace.household_id == "HH-004217"
     assert len(trace.holdings) == 6
-    assert len(trace.tool_calls) == 4
+    assert {c.tool_name for c in trace.tool_calls} == set(trace.expected_tool_set)
     assert RunTrace.model_validate_json(trace.model_dump_json()) == trace

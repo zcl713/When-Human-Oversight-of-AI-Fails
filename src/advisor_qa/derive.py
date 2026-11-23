@@ -64,7 +64,8 @@ PCT_KEYS = ("pct", "return")
 
 def link_numbers(text: str, outputs: Mapping[str, Mapping[str, Any]]) -> list[NumberLink]:
     """Match each figure in the answer to a tool-output value that displays the same way.
-    `outputs` maps output_hash -> tool output. source = '<output_hash>:<key>' or None."""
+    `outputs` maps output_hash -> tool output. source = '<output_hash>:<key>' or None. A figure
+    shown without a sign ('fell 0.03%') matches a value of either sign; the words carry it."""
     links: list[NumberLink] = []
     for shown, value, kind in parse_numbers(text):
         tol = 0.5 * 10 ** -_decimals(shown) + 1e-9
@@ -74,7 +75,8 @@ def link_numbers(text: str, outputs: Mapping[str, Mapping[str, Any]]) -> list[Nu
                 is_pct = any(p in key.split(".")[-1] for p in PCT_KEYS)
                 if (kind == "pct") != is_pct:
                     continue
-                if abs(v - value) <= tol:
+                unsigned = shown.lstrip()[:1] not in "+-"
+                if abs(v - value) <= tol or (unsigned and abs(abs(v) - value) <= tol):
                     source = f"{h}:{key}"
                     break
             if source:
@@ -92,6 +94,8 @@ PHRASES: dict[str, tuple[str, ...]] = {
         "this figure is exact",
         "no need to worry",
         "nothing to worry about",
+        "portfolio is safe",
+        "no action is needed",
     ),
     "advice": ("i recommend", "i'd recommend", "you should sell", "you should buy"),
     "forward": ("will recover", "will rebound", "expect this to recover", "bounce back"),
@@ -138,6 +142,7 @@ WINDOW_WORDS: dict[str, tuple[str, ...]] = {
     "mtd": ("this month",),
     "ytd": ("this year", "year to date", "ytd"),
 }
+MARKET_WORDS = ("versus the market", "vs. the market", "vs the market", "against the market")
 BENCHMARK_WORDS: dict[str, tuple[str, ...]] = {
     "SPY": ("s&p 500", "s&p"),
     "VTI": ("total market", "total stock market"),
@@ -171,7 +176,10 @@ def requested_window(prompt: str) -> str | None:
 
 
 def requested_benchmark(prompt: str) -> str | None:
+    """A named index's ticker, 'MIX' for "the market" (fit to the client's mix), or None."""
     low = prompt.lower()
+    if any(x in low for x in MARKET_WORDS):
+        return "MIX"
     for b, words in BENCHMARK_WORDS.items():
         if any(x in low for x in words):
             return b
@@ -189,3 +197,30 @@ _SURNAME = re.compile(r"\bthe ([A-Z][a-z]+) household\b")
 def named_surname(prompt: str) -> str | None:
     m = _SURNAME.search(prompt)
     return m.group(1) if m else None
+
+
+# --- Client mix and benchmark (I4) -------------------------------------------------------------
+
+EQUITY_TYPES = {"equity_etf", "mutual_fund", "leveraged_etf", "options_etf", "foreign_equity"}
+TARGET_DATE_EQUITY = 0.6  # rough equity share of a target-date fund, for the mix only
+ALL_EQUITY = 0.85  # at or above this equity share, the S&P 500 is a fair benchmark
+
+
+def equity_share(items: Iterable[tuple[str, float]]) -> float:
+    """Equity share of (instrument_type, value) pairs."""
+    total = eq = 0.0
+    for itype, value in items:
+        total += value
+        if itype in EQUITY_TYPES:
+            eq += value
+        elif itype == "target_date_fund":
+            eq += TARGET_DATE_EQUITY * value
+    return eq / total if total else 1.0
+
+
+def mix_benchmark(share: float) -> str:
+    """'SPY' for an (almost) all-equity mix, else an SPY/BND blend to the nearest 10%."""
+    if share >= ALL_EQUITY:
+        return "SPY"
+    w = min(80, max(10, int(round(share * 10)) * 10))
+    return f"SPY{w}/BND{100 - w}"

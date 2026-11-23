@@ -15,13 +15,15 @@ class PipelineParams(BaseModel):
     surname_prompt_share: float = 0.2
     same_day_flow_rate: float = 0.05
     tools: list[str]
-    expected_tools: dict[str, list[str]]
+    calc_tools: dict[str, str]  # "intraday" / "period" -> calculation tool
+    expected_tools: dict[str, list[str]]  # "core" plus resolved intent -> extra tools
 
     @model_validator(mode="after")
     def _check(self) -> "PipelineParams":
         if abs(sum(self.question_mix.values()) - 1) > 1e-9:
             raise ValueError("pipeline.question_mix must sum to 1")
-        for intent, tools in self.expected_tools.items():
+        named = {"calc_tools": list(self.calc_tools.values()), **self.expected_tools}
+        for intent, tools in named.items():
             unknown = set(tools) - set(self.tools)
             if unknown:
                 raise ValueError(f"expected_tools[{intent}] names unknown tools {sorted(unknown)}")

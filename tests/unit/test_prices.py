@@ -360,9 +360,10 @@ def test_fixture_true_impact(which: str, request: pytest.FixtureRequest) -> None
 
 def test_fixture_day_is_d1_setup(world: PriceWorld) -> None:
     """Funds publish the 2026-03-09 NAV on the fixture day while the latent value has moved."""
-    for ins in ("INS-05", "INS-06"):
+    ref = load_instruments().set_index("instrument_id")["reference_price"]
+    for ins in ("INS-05", "INS-14", "INS-15"):
         price, as_of = world.published_price(ins, FIXTURE_TS)
-        assert price == 100.0 and as_of == datetime(2026, 3, 9, 16, 0)
+        assert price == ref[ins] and as_of == datetime(2026, 3, 9, 16, 0)
         assert world.latent_value(ins, FIXTURE_TS) != price
 
 
@@ -427,7 +428,7 @@ def test_csv_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, world: Price
     assert len(pub) == len(lat) == 24 * 180 * 79 and len(daily) == 24 * 180
     key = ("INS-05", "2026-03-10T14:05:00")
     assert pub.loc[key, "price"] == 100.0 and pub.loc[key, "price_as_of"] == "2026-03-09T16:00:00"
-    assert lat.loc[key, "value"] == world.latent_value(*key) == 98.5
+    assert lat.loc[key, "value"] == world.latent_value(*key) == 98.0
     etf = ("INS-01", "2026-03-10T14:05:00")
     assert pub.loc[etf, "price"] == lat.loc[etf, "value"] == 440.55
     assert pub.loc[etf, "price_as_of"] == "2026-03-10T14:05:00"

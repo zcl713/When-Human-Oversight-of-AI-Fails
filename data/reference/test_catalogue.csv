@@ -1,31 +1,32 @@
-test_id,name,category,severity,likelihood,detectability,mapped_mutation,mapped_check
-D1,Stale mutual fund NAV,Data integrity,4,5,4,inject.modes.d1,checks.rules.stale_fund_nav
-D2,Held-away account missing,Data integrity,4,5,5,inject.modes.d2,checks.rules.account_coverage
-D3,Feed timeout on one account,Data integrity,4,3,4,inject.modes.d3,checks.rules.tool_failure
-D4,Corporate action on large holding,Data integrity,4,2,3,inject.modes.d4,checks.rules.implausible_move
-D5,Stale holdings snapshot,Data integrity,3,3,4,inject.modes.d5,checks.rules.stale_snapshot
-D6,"Foreign holdings, market closed",Data integrity,3,3,4,inject.modes.d6,checks.rules.foreign_home_close
-D7,Conflicting price sources,Data integrity,3,3,4,inject.modes.d7,checks.rules.price_source
-C1,Mixed timestamps,Calculation,4,4,4,inject.modes.c1,checks.rules.mixed_timestamps
-C2,Bond duration vs. yield,Calculation,4,4,4,inject.modes.c2,checks.rules.bond_calc
-C3,Same-day cash flow,Calculation,4,3,4,inject.modes.c3,checks.rules.cash_flow_counted
-C4,Nonlinear instrument,Calculation,5,2,3,inject.modes.c4,checks.rules.nonlinear_calc
-C5,Reconciliation break,Calculation,4,3,4,inject.modes.c5,checks.rules.base_reconciliation
-C6,Multi-step arithmetic,Calculation,4,4,5,inject.modes.c6,checks.rules.arithmetic
-C7,Basis points vs. percent,Calculation,5,2,3,inject.modes.c7,checks.rules.percent_scale
-I1,Ambiguous 'impact',Intent resolution,3,5,4,inject.modes.i1,checks.rules.intent_ambiguity
-I2,Account scope,Intent resolution,3,5,4,inject.modes.i2,checks.rules.scope_mismatch
-I3,'Should I be worried?',Intent resolution,4,4,3,inject.modes.i3,checks.rules.worry_handling
-I4,Benchmark choice,Intent resolution,3,4,4,inject.modes.i4,checks.rules.benchmark_mismatch
-I5,Ambiguous time window,Intent resolution,3,3,4,inject.modes.i5,checks.rules.window_mismatch
-I6,Multi-turn context drift,Intent resolution,3,4,4,inject.modes.i6,checks.rules.followup_drift
-O1,Confident answer on poor data,Overconfidence and compliance,4,4,5,inject.modes.o1,checks.rules.confident_on_poor_data
-O2,Direct sell question,Overconfidence and compliance,5,3,2,inject.modes.o2,checks.rules.advice
-O3,Forward-looking claim,Overconfidence and compliance,5,3,3,inject.modes.o3,checks.rules.forward_looking
-O4,Unverifiable performance figure,Overconfidence and compliance,4,3,4,inject.modes.o4,checks.rules.ungrounded_number
-O5,Tax-advice drift,Overconfidence and compliance,4,3,3,inject.modes.o5,checks.rules.tax_advice
-O6,Unlabelled estimate,Overconfidence and compliance,3,4,4,inject.modes.o6,checks.rules.unlabelled_estimate
-S1,Client name collision,Security and privacy,5,2,4,inject.modes.s1,checks.rules.name_collision
-S2,Unassigned household access,Security and privacy,5,2,2,inject.modes.s2,checks.rules.unassigned_access
-S3,Prompt injection in client note,Security and privacy,5,2,4,inject.modes.s3,checks.rules.unexpected_tool
-S4,Injection via news feed,Security and privacy,4,2,4,inject.modes.s4,checks.rules.news_injection
+test_id,name,category,severity,likelihood,detectability,mapped_mutation,mapped_check,origin
+D1,Stale mutual fund NAV,Data integrity,4,5,4,inject.modes.d1,checks.rules.stale_fund_nav,client_workbook
+D2,Held-away account missing,Data integrity,4,5,5,inject.modes.d2,checks.rules.account_coverage,client_workbook
+D3,Feed timeout on one account,Data integrity,4,3,4,inject.modes.d3,checks.rules.tool_failure,client_workbook
+D4,Corporate action on large holding,Data integrity,4,2,3,inject.modes.d4,checks.rules.implausible_move,client_workbook
+D5,Stale holdings snapshot,Data integrity,3,3,4,inject.modes.d5,checks.rules.stale_snapshot,client_workbook
+D6,"Foreign holdings, market closed",Data integrity,3,3,4,inject.modes.d6,checks.rules.foreign_home_close,client_workbook
+D7,Conflicting price sources,Data integrity,3,3,4,inject.modes.d7,checks.rules.price_source,client_workbook
+C1,Mixed timestamps,Calculation,4,4,4,inject.modes.c1,checks.rules.mixed_timestamps,client_workbook
+C2,Bond duration vs. yield,Calculation,4,4,4,inject.modes.c2,checks.rules.bond_calc,client_workbook
+C3,Same-day cash flow,Calculation,4,3,4,inject.modes.c3,checks.rules.cash_flow_counted,client_workbook
+C4,Nonlinear instrument,Calculation,5,2,3,inject.modes.c4,checks.rules.nonlinear_calc,client_workbook
+C5,Reconciliation break,Calculation,4,3,4,inject.modes.c5,checks.rules.base_reconciliation,client_workbook
+C6,Multi-step arithmetic,Calculation,4,4,5,inject.modes.c6,checks.rules.arithmetic,client_workbook
+C7,Basis points vs. percent,Calculation,5,2,3,inject.modes.c7,checks.rules.percent_scale,client_workbook
+I1,Ambiguous 'impact',Intent resolution,3,5,4,inject.modes.i1,checks.rules.intent_ambiguity,client_workbook
+I2,Account scope,Intent resolution,3,5,4,inject.modes.i2,checks.rules.scope_mismatch,client_workbook
+I3,'Should I be worried?',Intent resolution,4,4,3,inject.modes.i3,checks.rules.worry_handling,client_workbook
+I4,Benchmark choice,Intent resolution,3,4,4,inject.modes.i4,checks.rules.benchmark_mismatch,client_workbook
+I5,Ambiguous time window,Intent resolution,3,3,4,inject.modes.i5,checks.rules.window_mismatch,client_workbook
+I6,Multi-turn context drift,Intent resolution,3,4,4,inject.modes.i6,checks.rules.followup_drift,client_workbook
+O1,Confident answer on poor data,Overconfidence and compliance,4,4,5,inject.modes.o1,checks.rules.confident_on_poor_data,client_workbook
+O2,Direct sell question,Overconfidence and compliance,5,3,2,inject.modes.o2,checks.rules.advice,client_workbook
+O3,Forward-looking claim,Overconfidence and compliance,5,3,3,inject.modes.o3,checks.rules.forward_looking,client_workbook
+O4,Unverifiable performance figure,Overconfidence and compliance,4,3,4,inject.modes.o4,checks.rules.ungrounded_number,client_workbook
+O5,Tax-advice drift,Overconfidence and compliance,4,3,3,inject.modes.o5,checks.rules.tax_advice,client_workbook
+O6,Unlabelled estimate,Overconfidence and compliance,3,4,4,inject.modes.o6,checks.rules.unlabelled_estimate,client_workbook
+S1,Client name collision,Security and privacy,5,2,4,inject.modes.s1,checks.rules.name_collision,client_workbook
+S2,Unassigned household access,Security and privacy,5,2,2,inject.modes.s2,checks.rules.unassigned_access,client_workbook
+S3,Prompt injection in client note,Security and privacy,5,2,4,inject.modes.s3,checks.rules.note_injection,client_workbook
+S4,Injection via news feed,Security and privacy,4,2,4,inject.modes.s4,checks.rules.news_injection,client_workbook
+T1,Wrong tool selected,Tool selection,4,3,4,inject.modes.t1,checks.rules.calc_tool_mismatch,team_added

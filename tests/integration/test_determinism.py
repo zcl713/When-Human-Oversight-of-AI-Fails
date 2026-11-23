@@ -18,7 +18,7 @@ def _write(out: Path, seed_offset: int = 0) -> None:
     t = tables()
     ds = generate(t.households, t.accounts, t.holdings, load_instruments(), prices(), pipe, inj,
                   seed + seed_offset, max_days=4)  # fmt: skip
-    assert not ds.clean_errors
+    assert not ds.unexplained
     write_dataset(ds, out, seed + seed_offset)
 
 

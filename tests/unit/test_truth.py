@@ -62,4 +62,4 @@ def test_empty_scope_and_bad_inputs(truth: Truth) -> None:
 def test_per_holding_sums_to_total(truth: Truth) -> None:
     got = truth.impact(HH, "2026-03-10T14:05:00", truth.all_accounts(HH))
     assert sum(got.by_holding.values()) == pytest.approx(got.dollars, abs=0.05)
-    assert got.by_holding[("ACC-88122", "INS-03")] == pytest.approx(-2_100, abs=0.01)
+    assert got.by_holding[("ACC-88122", "INS-15")] == pytest.approx(-1_500, abs=0.01)

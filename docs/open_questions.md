@@ -15,11 +15,8 @@ Resolved items move to `decisions.md`.
   evaluation was our own choice, not calibrated to anything. Hints so far (decisions.md,
   2026-11-23): the client workbook suggests seeding "1 in 50" for reviewer experiments; TRAIL's
   research traces have errors in about 97% of traces, but on much harder tasks.
-- **Tool inventory and what counts as a "wrong tool"**: confirm with Lopa at LPL. A provisional
-  list is in use (see `decisions.md`, 2026-11-20). It adds `get_market_news` and
-  `get_client_notes`, because S3 and S4 need a note and a news feed to inject into.
-- **ID for the "wrong tool" failure mode**: the old prototype used T1, pending Lopa's review. Not
-  in `FailureModeId` yet.
+- **Wrong tool (T1)**: built as a team-added mode on our own tool inventory (decisions.md,
+  2026-11-23). Worth showing Lopa, since it is not in the client workbook.
 - **Severity formula** for the hidden label: a placeholder is implemented (highest suite
   severity + log10(1 + dollar error); `inject/plan.py`). The real formula is still open.
 
@@ -32,10 +29,8 @@ Resolved items move to `decisions.md`.
 
 ## Assumptions to confirm (not from SCF)
 These are in `config/default.yaml` or `instruments.csv`. Change them if a collaborator knows better.
-- The firm shows intraday indicative NAVs for mutual funds and fair values for foreign holdings,
-  so a correct answer can match the truth exactly (decisions.md, 2026-11-20). If the real tools
-  only show the official NAV, the correct agent would need a proxy estimate and clean runs would
-  carry a small tracking error.
+- How the platform estimates what it cannot observe: funds from a proxy ETF (target-date funds
+  from their equity weight on SPY and BND), the foreign holding from 0.70 x the S&P 500 move.
 - 15% of households hold a synthetic foreign-listed equity (`SYN-JPEQ`, not a real security);
   5% of household-days have a same-day deposit or withdrawal (C3). Client names are made up.
 - ETF share of fund dollars (default 0.5; SCF cannot split it). Sweep 0.2 / 0.5 / 0.8.
@@ -51,21 +46,25 @@ These are in `config/default.yaml` or `instruments.csv`. Change them if a collab
 
 ## Known gaps
 Things that work but are weaker than they look. None blocks the current pipeline.
-- **The truth function is only checked independently on the fixture.** The correct agent and the
-  truth function read the same true prices (mutual-fund indicative NAVs are set equal to the true
-  value), so "clean runs match the truth" shows the two add up the same way, not that the truth
-  is right. The fixture's -$21,700 comes from the hand-off, so it is the one independent anchor.
-  Hand-calculated cases would close this (roadmap, "What is left").
+- **Hand-calculated truth cases** (leveraged ETF, foreign holding, a week-to-date window) are still
+  missing. The circularity is gone: since 2026-11-23 the correct agent estimates funds instead of
+  reading the true value, and tests check that its error equals the estimation error exactly.
 - **`as_of` on a weekend or holiday** raises an error instead of snapping to the last close.
 - **Checks were written next to the mutations**, so each check knows the trace signature its
   mutation leaves. The 7.5x lift at `rate_scale` 0.2 is close to the ceiling and is an upper bound.
 - **Masked modes keep their label.** When two modes on a run interact (e.g. D3 drops the account
   that D4 targeted), the run is still labelled with both, though one had no effect. Some checks
   probably miss for this reason (e.g. D1 recall 0.98 on train; not verified run by run).
-- **Rare modes have few runs** at the placeholder rates (train: C4 2, S3 5, D6 8, S1 8, O2 9).
+- **Rare modes have few runs** at the placeholder rates (train: C4 2, C7 6, O4 7, S1 6, S4 4,
+  C3 8, O5 8, D6 9).
+- **Workbook setups we only approximate:** C2's prompt ("How are my bonds doing?") is not a
+  question kind, so C2 rides on ordinary impact questions; D6 has no separate FX rate (it is
+  inside the home close); I6 has turn 3 but no stored turns 1-2.
 - **Numbers the agent computed itself** (C2, C3, C4, C6) have no tool output to link to, so their
-  `NumberLink.source` is null and the ungrounded-number check (O4) also fires on them.
-- **`events.csv` (D4 hook) is unused.** D4 applies the split in the price tool output.
+  `NumberLink.source` is null and the ungrounded-number check (O4) also fires on them; it fires
+  on 826 train runs for 7 O4 runs.
+- **`events.csv` (D4 hook) is unused.** D4 adds the split to the corporate-actions tool output
+  instead.
 - **C7 on small moves**: a percent divided by 100 rounds to 0.00% and is indistinguishable from a
   tiny real move, so the check misses some (recall 0.73 on train).
 

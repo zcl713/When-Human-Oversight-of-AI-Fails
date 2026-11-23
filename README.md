@@ -6,7 +6,7 @@ wealth-management advisor assistant. With no real agent traces available, we **s
 risk-based review at equal capacity K.
 
 **Current status:** the full pipeline runs end to end: households, synthetic prices, ground
-truth, questions, mock tools, a correct agent, all 30 injected failure modes with hidden labels,
+truth, questions, mock tools, a correct agent, all 31 injected failure modes with hidden labels,
 deterministic checks, a weighted risk score and the random-vs-risk evaluation at capacity K.
 Failure rates and the severity formula are placeholders. **Start with `docs/roadmap.md`**, then
 `docs/decisions.md` and `docs/open_questions.md`.
@@ -70,7 +70,7 @@ and `uv.lock`.
 | `src/advisor_qa/world/` | Households, accounts, holdings, instruments, calendar, synthetic prices, household split |
 | `src/advisor_qa/truth/` | Ground-truth portfolio impact (reads latent prices) |
 | `src/advisor_qa/pipeline/` | Questions, mock tools, the correct agent, the dataset generator |
-| `src/advisor_qa/inject/` | The 30 failure modes and the hidden labels |
+| `src/advisor_qa/inject/` | The 31 failure modes (30 from the client workbook + T1) and the hidden labels |
 | `src/advisor_qa/store/` | Per-split JSONL runs, answers and labels; manifest |
 | `src/advisor_qa/derive.py` | Answer fields and prompt parsing (shared by generator and checks) |
 | `src/advisor_qa/checks/`, `scoring/` | Deterministic checks on a trace; the risk score |

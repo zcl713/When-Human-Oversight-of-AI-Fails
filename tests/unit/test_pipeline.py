@@ -7,6 +7,7 @@ import pytest
 from advisor_qa import derive
 from advisor_qa.inject.modes import MODES
 from advisor_qa.inject.plan import dollar_error, make_label
+from advisor_qa.pipeline.agent import RunResult
 from advisor_qa.pipeline.questions import Question
 from advisor_qa.schema.trace import RunTrace
 from advisor_qa.store.runs import canonical_json, output_hash
@@ -33,16 +34,29 @@ def test_fixture_run_is_the_golden_clean_run(kit: Kit) -> None:
     assert fixture_trace(kit) == want
 
 
-def test_fixture_run_numbers(kit: Kit) -> None:
-    r = kit.agent.run(kit.questions.fixture(FIXTURE_DAY))
-    assert r.claimed_dollars == -21_700
-    assert "-$21,700 (-1.8%)" in r.answer
-    assert all(link.source for link in r.trace.number_to_tool_output_links)
+def estimation_error(kit: Kit, r: RunResult) -> float:
+    """sum of qty x (true value - price used): what estimating funds / closed markets costs."""
+    ts = r.trace.calc_as_of
+    return sum(h.qty * (kit.world.prices.latent_value(h.instrument_id, ts) - h.price)
+               for h in r.trace.holdings)  # fmt: skip
+
+
+def test_fixture_run_is_an_estimate(kit: Kit) -> None:
+    """The truth is -$21,700, but the three funds cannot be observed intraday: the correct answer
+    estimates them from proxies and says so, so it differs by exactly their tracking error."""
+    q = kit.questions.fixture(FIXTURE_DAY)
+    r = kit.agent.run(q)
+    assert r.claimed_dollars is not None
+    assert r.claimed_dollars - (-21_700) == pytest.approx(-estimation_error(kit, r), abs=0.5)
+    assert abs(r.claimed_dollars + 21_700) < 0.002 * 1_200_000  # within 0.2% of the household
+    funds = {h.instrument_id for h in r.trace.holdings if h.price_source == "proxy_estimate"}
+    assert funds == {"INS-05", "INS-14", "INS-15"}
+    assert "estimated from proxies" in r.answer and "VTHRX (0.60 x SPY + 0.40 x BND)" in r.answer
+    assert "This covers 3 accounts worth $1,200,000" in r.answer
     calc = next(c for c in r.trace.tool_calls if c.tool_name == "calculate_portfolio_impact")
-    assert {link.source for link in r.trace.number_to_tool_output_links} == {
-        f"{calc.output_hash}:dollar_impact",
-        f"{calc.output_hash}:pct_impact",
-    }
+    sources = {link.source for link in r.trace.number_to_tool_output_links}
+    assert {f"{calc.output_hash}:dollar_impact", f"{calc.output_hash}:pct_impact",
+            f"{calc.output_hash}:base"} == sources  # fmt: skip
     assert r.trace.base == 1_200_000 and r.trace.estimate_label and r.trace.disclosures_present
 
 
@@ -59,10 +73,20 @@ def questions(kit: Kit) -> list[Question]:
     return _questions(kit)
 
 
-def test_clean_runs_match_truth(kit: Kit, questions: list[Question]) -> None:
+def test_clean_runs_differ_from_truth_only_by_estimation(
+    kit: Kit, questions: list[Question]
+) -> None:
+    """Correct answers equal the truth except for estimated holdings (funds, closed foreign
+    markets); runs that need no estimate match it to the dollar."""
     for q in questions:
         r = kit.agent.run(q)
-        assert dollar_error(q, r, kit.truth) == 0, (q.prompt, r.answer)
+        est = estimation_error(kit, r)
+        err = dollar_error(q, r, kit.truth)
+        assert err <= abs(est) + 0.5, (q.prompt, r.answer, err, est)
+        if not any(h.price_source in ("proxy_estimate", "fair_value_estimate")
+                   for h in r.trace.holdings):  # fmt: skip
+            assert err == 0
+        assert abs(est) <= 0.01 * max(r.trace.base, 1.0)
         assert r.trace.interpretation_restated and r.trace.disclosures_present
         assert {t.tool_name for t in r.trace.tool_calls} == set(r.trace.expected_tool_set)
         assert all(c.status == "ok" for c in r.trace.tool_calls)
@@ -71,7 +95,7 @@ def test_clean_runs_match_truth(kit: Kit, questions: list[Question]) -> None:
 def test_question_mix_covers_every_kind(questions: list[Question]) -> None:
     assert {q.kind for q in questions} == {
         "impact_all", "impact_scoped", "period", "benchmark", "ambiguous_impact",
-        "ambiguous_window", "worried", "sell", "tax", "followup",
+        "ambiguous_window", "worried", "sell", "tax", "followup", "rates", "inception",
     }  # fmt: skip
 
 
@@ -101,7 +125,7 @@ def test_every_mode_changes_the_run_and_is_labelled(
     base = kit.injector.build(q, base_modes, incident)
     clean = kit.agent.run(base.question, base.faults)
     assert _comparable(faulty.trace) != _comparable(clean.trace) or faulty.answer != clean.answer
-    label = make_label(planned, faulty, kit.truth, kit.injector.cat)
+    label = make_label(planned, faulty, clean, kit.injector.cat)
     assert label.error_present and [m.value for m in label.error_type] == chosen
     assert label.severity >= kit.injector.cat.loc[mode, "severity"]
     if mode == "D5":
