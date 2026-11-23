@@ -71,7 +71,9 @@ and `uv.lock`.
 | `src/advisor_qa/truth/` | Ground-truth portfolio impact (reads latent prices) |
 | `src/advisor_qa/pipeline/` | Questions, mock tools, the correct agent, the dataset generator |
 | `src/advisor_qa/inject/` | The 31 failure modes (30 from the client workbook + T1) and the hidden labels |
-| `src/advisor_qa/store/` | Per-split JSONL runs, answers and labels; manifest |
+| `src/advisor_qa/otel/` | OTLP/JSON trace model and the emitter (GenAI semantic conventions v0.1.0) |
+| `src/advisor_qa/qa/` | The QA view: the 39-field RunTrace derived from a run's spans |
+| `src/advisor_qa/store/` | Per-split JSONL of OTLP traces and of hidden labels; manifest |
 | `src/advisor_qa/derive.py` | Answer fields and prompt parsing (shared by generator and checks) |
 | `src/advisor_qa/checks/`, `scoring/` | Deterministic checks on a trace; the risk score |
 | `src/advisor_qa/eval/` | Random vs risk-based review at capacity K (the only reader of labels) |

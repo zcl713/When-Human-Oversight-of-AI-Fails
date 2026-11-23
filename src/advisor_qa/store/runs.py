@@ -1,11 +1,13 @@
-"""Runs storage: per-split JSONL of `RunTrace`, answers sidecar, manifest.
+"""Runs storage: per-split JSONL of OpenTelemetry traces, manifest.
 
-Layout under one dataset folder (decisions.md, 2026-11-20):
+Layout under one dataset folder (decisions.md, 2026-11-20 and 2026-11-23):
 
-    runs/{train,val,test}.jsonl      one RunTrace per line, sorted by (timestamp, run_id)
-    answers/{train,val,test}.jsonl   {"run_id", "answer"}: the answer text the Answer fields
-                                     were derived from (the 39-field trace has no text field)
-    labels/{train,val,test}.jsonl    hidden labels (advisor_qa.store.labels; evaluation only)
+    runs/{train,val,test}.jsonl      one OTLP/JSON TracesData per line (one run: root
+                                     invoke_agent span and its children), sorted by
+                                     (start time, trace id). The 39-field RunTrace is derived
+                                     from it by advisor_qa.qa.view; it is not stored.
+    labels/{train,val,test}.jsonl    hidden labels keyed by run_id = trace id
+                                     (advisor_qa.store.labels; evaluation only)
     split_households.csv             household_id, split
     directory.csv                    CRM directory: household_id, advisor_id, client_name
     manifest.json                    seed, config hash, counts, schema version
@@ -21,11 +23,11 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from advisor_qa.schema.trace import RunTrace
+from advisor_qa.otel.model import TracesData
 
 SCHEMA_VERSION = "1"
 SPLITS = ("train", "val", "test")
-RUNS_DIR, ANSWERS_DIR, LABELS_DIR = "runs", "answers", "labels"
+RUNS_DIR, LABELS_DIR = "runs", "labels"
 MANIFEST_FILE, SPLIT_FILE, DIRECTORY_FILE = (
     "manifest.json",
     "split_households.csv",
@@ -73,27 +75,14 @@ def read_jsonl(path: Path) -> Iterator[dict[str, Any]]:
                 yield json.loads(line)
 
 
-def write_runs(root: Path, split: str, traces: Iterable[RunTrace]) -> int:
-    return write_jsonl(root / RUNS_DIR / f"{split}.jsonl", (_dump(t) for t in traces))
+def write_runs(root: Path, split: str, traces: Iterable[TracesData]) -> int:
+    lines = (canonical_json(t.model_dump(mode="json", exclude_none=True)) for t in traces)
+    return write_jsonl(root / RUNS_DIR / f"{split}.jsonl", lines)
 
 
-def read_runs(root: Path, split: str) -> Iterator[RunTrace]:
+def read_runs(root: Path, split: str) -> Iterator[TracesData]:
     for raw in read_jsonl(root / RUNS_DIR / f"{split}.jsonl"):
-        yield RunTrace.model_validate(raw)
-
-
-def write_answers(root: Path, split: str, answers: Iterable[tuple[str, str]]) -> int:
-    return write_jsonl(
-        root / ANSWERS_DIR / f"{split}.jsonl",
-        (canonical_json({"answer": a, "run_id": r}) for r, a in answers),
-    )
-
-
-def read_answers(root: Path, split: str) -> dict[str, str]:
-    return {
-        str(x["run_id"]): str(x["answer"])
-        for x in read_jsonl(root / ANSWERS_DIR / f"{split}.jsonl")
-    }
+        yield TracesData.model_validate(raw)
 
 
 def write_manifest(root: Path, manifest: Manifest) -> None:

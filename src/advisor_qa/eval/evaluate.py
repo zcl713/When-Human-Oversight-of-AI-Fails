@@ -21,6 +21,8 @@ import pandas as pd
 import yaml
 
 from advisor_qa.checks.rules import CHECKS, CrmDirectory, run_checks
+from advisor_qa.pipeline.params import load_pipeline_config
+from advisor_qa.qa.view import derive_view
 from advisor_qa.scoring.weighted import FlagCount, Scorer, WeightedSum
 from advisor_qa.store.labels import read_labels
 from advisor_qa.store.runs import DIRECTORY_FILE, read_manifest, read_runs
@@ -31,9 +33,14 @@ RANDOM_DRAWS = 1000
 
 
 def flag_table(root: Path, split: str) -> pd.DataFrame:
-    """One row per run (index run_id), one bool column per check."""
+    """One row per run (index run_id), one bool column per check. Each run's OpenTelemetry trace
+    is turned into the QA view first; checks see the view and the raw tool results."""
     directory = CrmDirectory.read(root / DIRECTORY_FILE)
-    rows = {t.run_id: run_checks(t, directory) for t in read_runs(root, split)}
+    params = load_pipeline_config()[1]
+    rows = {}
+    for trace in read_runs(root, split):
+        view = derive_view(trace, params)
+        rows[view.run_id] = run_checks(view, trace, directory)
     return pd.DataFrame.from_dict(rows, orient="index")[list(CHECKS)].astype(bool)
 
 

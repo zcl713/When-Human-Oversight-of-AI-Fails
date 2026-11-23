@@ -12,6 +12,7 @@ I2, I5), pick a benchmark that fits the client's mix (I4), give facts but no adv
 O5), convert basis points correctly (C7), and say what cannot be verified (O4).
 """
 
+import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -20,6 +21,8 @@ from typing import Any
 import numpy as np
 
 from advisor_qa import derive
+from advisor_qa.otel.emit import RunRecord, ToolRecord, build_trace
+from advisor_qa.otel.model import TracesData
 from advisor_qa.pipeline.directory import Directory, surname
 from advisor_qa.pipeline.params import PipelineParams
 from advisor_qa.pipeline.questions import ACCOUNT_LABEL, AMBIGUOUS_KINDS, MIX, Question
@@ -30,8 +33,8 @@ from advisor_qa.pipeline.tools import (
     World,
     calculate_portfolio_impact,
 )
-from advisor_qa.schema.trace import Alternative, Holding, RunTrace, ToolCall
-from advisor_qa.store.runs import output_hash
+from advisor_qa.qa.view import derive_view
+from advisor_qa.schema.trace import RunTrace
 from advisor_qa.truth.impact import window_start
 from advisor_qa.world.streams import stream
 
@@ -99,6 +102,10 @@ class RunState:
     calc: Calc | None = None
     yields: dict[str, Any] | None = None
     benchmark: str | None = None  # index actually used
+    accounts: list[dict[str, Any]] = field(default_factory=list)  # get_accounts result
+    not_in_feed: list[str] = field(default_factory=list)  # account types the feed lacks
+    timed_out: list[str] = field(default_factory=list)  # account types whose positions failed
+    discrepancies: list[str] = field(default_factory=list)  # tickers: custodian vs vendor > 1%
 
 
 Sentence = list[tuple[str, str]]  # (tag, text), in order
@@ -123,7 +130,8 @@ class Faults:
 
 @dataclass(frozen=True)
 class RunResult:
-    trace: RunTrace
+    trace: RunTrace  # the QA view, derived from `otel` only
+    otel: TracesData  # what the instrumented agent emitted
     answer: str
     claimed_dollars: float | None  # first dollar figure in the answer
     resolution: Resolution
@@ -147,25 +155,36 @@ def _day(d: date) -> str:
 def recompute(calc: Calc, rows: list[dict[str, Any]], flows: float) -> None:
     """Redo the calculation tool's output from rows (after a fault changed prices or starts)."""
     bench = calc.output.get("benchmark_pct")
-    calc.output = calculate_portfolio_impact(rows, flows, bench)
+    calc.output = calculate_portfolio_impact(rows, flows, bench, calc.args.get("base"))
 
 
 def price_row(position: dict[str, Any], quote: dict[str, Any], kind: str) -> dict[str, Any]:
     """The correct choice of price for one holding, from its quote or NAV record."""
     row = {**position, "start_price": quote["start_price"], "kind": kind}
     if kind == "etf":
-        row.update(price=quote["price"], as_of=quote["as_of"], source="feed", tool="get_quotes")
+        row.update(price=quote["price"], as_of=quote["as_of"], source="live", tool="get_quotes")
     elif kind == "foreign":
         row.update(price=quote["fair_value_estimate"], as_of=quote["as_of_now"],
-                   source="fair_value_estimate", method=quote["fair_value_method"],
+                   source="fair_value", method=quote["fair_value_method"],
                    tool="get_quotes")  # fmt: skip
     elif kind == "money_market":
         row.update(price=quote["nav"], as_of=quote["estimate_as_of"], source="stable_nav",
                    tool="get_fund_navs")  # fmt: skip
     else:
-        row.update(price=quote["estimate"], as_of=quote["estimate_as_of"], source="proxy_estimate",
+        row.update(price=quote["estimate"], as_of=quote["estimate_as_of"], source="nav_estimate",
                    method=quote["estimate_method"], tool="get_fund_navs")  # fmt: skip
     return row
+
+
+def holding_args(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The holdings the agent passes to the calculation tool (what it priced, and how)."""
+    return [
+        {"account_id": r["account_id"], "account_type": r["account_type"],
+         "instrument_id": r["instrument_id"], "instrument_type": r["instrument_type"],
+         "qty": r["qty"], "price": r["price"], "price_as_of": r["as_of"],
+         "price_source": r["source"], "start_price": r["start_price"]}
+        for r in rows
+    ]  # fmt: skip
 
 
 class Agent:
@@ -195,29 +214,23 @@ class Agent:
         for hook in f.resolve:
             hook(res, st)
         st.res = res
-        calls: list[ToolCall] = []
-        outputs: dict[str, dict[str, Any]] = {}
+        records: list[ToolRecord] = []
+        step = 1
 
         def call(name: str, args: dict[str, Any], out: dict[str, Any]) -> dict[str, Any]:
             status = "ok"
             for hook in f.tool:
                 status = hook(name, out, st) or status
-            h = output_hash(out)
             latency = round(LATENCY_MS.get(name, 200) * float(np.exp(st.rng.normal(0, 0.25))), 1)
+            message = None
             if status == "timeout":
                 latency = round(latency + 30_000, 1)
-            calls.append(ToolCall(tool_name=name, args=args, status=status, latency_ms=latency,
-                                  output_hash=h))  # fmt: skip
-            outputs[h] = out
+                message = "upstream timeout on part of the request"
+            records.append(ToolRecord(step, name, args, out, status, message, latency))
             return out
 
         hh, ts, t = res.household_id, q.timestamp, st.tools
-        crm = self.w.account_table(hh)
-        crm_types = [
-            str(x) for x, ok in zip(crm["type"], crm["in_crm"], strict=True)
-            if bool(ok) and x not in f.crm_drop_types
-        ]  # fmt: skip
-        feed_types = sorted(set(crm["type"]))
+        crm_types: list[str] = []
         calc: Calc | None = None
         news: dict[str, Any] | None = None
         inception: dict[str, Any] | None = None
@@ -226,22 +239,24 @@ class Agent:
                 name = surname(self.dir.name_of[q.household_id])
                 call("search_clients", {"name": name}, t.search_clients(name))
             call("get_client_profile", {"household_id": hh}, t.get_client_profile(hh))
-            acc_out = t.get_accounts(hh)
-            acc_out["accounts"] = [
-                a for a in acc_out["accounts"] if a["type"] not in f.crm_drop_types
-            ]
-            acc_out = call("get_accounts", {"household_id": hh}, acc_out)
-            seen = {a["type"] for a in acc_out["accounts"]}
-            res.scope_types = [x for x in res.scope_types if x in seen]
-            ids_in_scope = [a["account_id"] for a in acc_out["accounts"]
-                            if a["type"] in res.scope_types]  # fmt: skip
+            acc_out = call("get_accounts", {"household_id": hh}, t.get_accounts(hh))
+            st.accounts = acc_out["accounts"]
+            crm_types = [a["type"] for a in st.accounts]
+            res.scope_types = [x for x in res.scope_types if x in crm_types]
+            ids_in_scope = [a["account_id"] for a in st.accounts if a["type"] in res.scope_types]
+            step = 2
             pos_args = {"household_id": hh, "account_ids": ids_in_scope}
             pos_out = call("get_positions", pos_args, t.get_positions(hh, ids_in_scope))
             positions = pos_out["positions"]
+            st.not_in_feed = [x for x in res.scope_types if x not in pos_out["accounts_in_feed"]]
+            failed = {e["account_id"] for e in pos_out.get("errors", [])}
+            st.timed_out = [a["type"] for a in st.accounts if a["account_id"] in failed]
+            res.scope_types = [x for x in res.scope_types if x not in st.not_in_feed]
             st.start_day = window_start(res.window, ts, self.w.prices.calendar.days) or ts.date()
             tx = call("get_transactions", {**pos_args, "since": ts.date().isoformat()},
                       t.get_transactions(hh, ids_in_scope, ts.date()))  # fmt: skip
             st.flows = round(sum(x["amount"] for x in tx["transactions"]), 2)
+            step = 3
             ids = sorted({p["instrument_id"] for p in positions})
             call("get_corporate_actions", {"instrument_ids": ids}, t.get_corporate_actions(ids))
             quoted = [i for i in ids if self.w.kind(i) not in FUND_KINDS]
@@ -254,6 +269,11 @@ class Agent:
                 out = call("get_quotes", {**px_args, "instrument_ids": quoted},
                            t.get_quotes(quoted, st.start_day))  # fmt: skip
                 quotes.update(out["quotes"])
+                st.discrepancies = sorted(
+                    self.w.ticker(i)
+                    for i, x in out["quotes"].items()
+                    if "vendor_price" in x and abs(x["vendor_price"] / x["price"] - 1) > 0.01
+                )
             if funds:
                 out = call("get_fund_navs", {**px_args, "instrument_ids": funds},
                            t.get_fund_navs(funds, st.start_day))  # fmt: skip
@@ -280,14 +300,21 @@ class Agent:
             if res.intent == "portfolio_performance":
                 inception = call("get_performance", {"household_id": hh, "period": "inception"},
                                  t.get_inception_performance(hh))  # fmt: skip
+            if res.intent == "market_concern":
+                news = call("get_market_news", {"date": ts.date().isoformat()},
+                            t.get_market_news())  # fmt: skip
+            step = 4
             calc = Calc(calculate_portfolio_impact(st.rows, st.flows, bench_pct),
                         tool_name=self.calc_tool(res.window))  # fmt: skip
-            calc.args = {"holdings": len(st.rows), "period": res.window}
+            calc.args = {"period": res.window, "as_of": ts.isoformat(),
+                         "net_flows_today": st.flows}  # fmt: skip
+            if bench_pct is not None:
+                calc.args["benchmark_pct"] = bench_pct
             for chook in f.calc:
                 chook(calc, st)
             if calc.via_tool:
-                call(calc.tool_name, calc.args, calc.output)
-        if res.intent in ("market_concern", "general_reassurance"):
+                call(calc.tool_name, {**calc.args, "holdings": holding_args(st.rows)}, calc.output)
+        else:
             news = call("get_market_news", {"date": ts.date().isoformat()}, t.get_market_news())
         for extra in f.extra_calls:
             got = extra(st)
@@ -299,9 +326,15 @@ class Agent:
         for ahook in f.answer:
             ahook(sentences, st)
         answer = " ".join(s for _, s in sentences if s)
-        trace = self._trace(q, res, st, calls, outputs, calc, answer, crm_types, feed_types)
+        conv = "conv_" + hashlib.sha256(f"{q.advisor_id}|{q.household_id}|{ts.date()}".encode()
+                                        ).hexdigest()[:24]  # fmt: skip
+        rec = RunRecord(q.run_id, ts, q.advisor_id, hh, conv, q.turn, q.prompt, answer,
+                        res.intent, res.alternatives, list(res.scope_types), res.window,
+                        records)  # fmt: skip
+        otel = build_trace(rec, stream(self.w.seed, "otel", q.run_id))
         dollars = [v for _, v, k in derive.parse_numbers(answer) if k == "dollars"]
-        return RunResult(trace, answer, dollars[0] if dollars else None, res)
+        return RunResult(derive_view(otel, self.p), otel, answer,
+                         dollars[0] if dollars else None, res)  # fmt: skip
 
     def benchmark_for(self, asked: str | None, rows: list[dict[str, Any]]) -> str:
         if asked and asked != MIX:
@@ -353,15 +386,28 @@ class Agent:
                             f"{derive.fmt_dollars(o['dollar_impact'])} "
                             f"({derive.fmt_pct(o['pct_impact'])}) "
                             f"{WINDOW_WORD[res.window]}."))  # fmt: skip
-        out.append(("coverage", f"This covers {len(res.scope_types)} account"
-                                f"{'s' if len(res.scope_types) != 1 else ''} worth "
-                                f"${o['base']:,.0f} at the start."))  # fmt: skip
+        n = len(res.scope_types)
+        plural = "s" if n != 1 else ""
+        cover = f"This covers {n} account{plural} worth ${o['base']:,.0f} at the start"
+        if st.not_in_feed:
+            missing = _join([ACCOUNT_LABEL[x] for x in st.not_in_feed])
+            cover += (f", {n} of {n + len(st.not_in_feed)} accounts on record: the {missing} "
+                      "is not in the data feed")  # fmt: skip
+        out.append(("coverage", cover + "."))
+        if st.timed_out:
+            lost = _join([ACCOUNT_LABEL[x] for x in st.timed_out])
+            out.append(("partial", f"Positions for the {lost} timed out, so they are not "
+                                   "included."))  # fmt: skip
+        if st.discrepancies:
+            which = ", ".join(st.discrepancies)
+            out.append(("discrepancy", f"Custodian and vendor prices for {which} differ by more "
+                                       "than 1%; I used the custodian price."))  # fmt: skip
         estimated = [r for r in st.rows if r["source"] in ESTIMATE_SOURCES]
         if estimated:
             funds = sorted({f"{self.w.ticker(r['instrument_id'])} ({r['method']})"
-                            for r in estimated if r["source"] == "proxy_estimate"})  # fmt: skip
+                            for r in estimated if r["source"] == "nav_estimate"})  # fmt: skip
             foreign = sorted({self.w.ticker(r["instrument_id"]) for r in estimated
-                              if r["source"] == "fair_value_estimate"})  # fmt: skip
+                              if r["source"] == "fair_value"})  # fmt: skip
             parts = []
             if funds:
                 parts.append("mutual funds are priced once a day, so their values are estimated "
@@ -404,108 +450,3 @@ class Agent:
                                    "professional."))  # fmt: skip
         out.append(("disclosure", derive.DISCLOSURE))
         return out
-
-    # --- trace ----------------------------------------------------------------------------------
-
-    def expected_tools(self, q: Question, rows: list[dict[str, Any]]) -> list[str]:
-        """What the QA layer expects, from the prompt: the intent's tools, the calculation tool
-        for the window the prompt names (today if none), the price tools the holdings need."""
-        e = self.p.expected_tools
-        if q.intent == "general_reassurance":
-            return list(e["general_reassurance"])
-        window = derive.requested_window(q.prompt) or "intraday"
-        if q.intent == "portfolio_performance":
-            window = "ytd"
-        out = list(e["core"]) + list(e.get(q.intent, []))
-        if derive.named_surname(q.prompt):
-            out.insert(0, "search_clients")
-        if not any(r["tool"] == "get_quotes" for r in rows) and "get_quotes" in out:
-            out.remove("get_quotes")
-        if any(r["tool"] == "get_fund_navs" for r in rows):
-            out.append("get_fund_navs")
-        out.append(self.calc_tool(window))
-        return list(dict.fromkeys(out))
-
-    def _trace(
-        self,
-        q: Question,
-        res: Resolution,
-        st: RunState,
-        calls: list[ToolCall],
-        outputs: dict[str, dict[str, Any]],
-        calc: Calc | None,
-        answer: str,
-        crm_types: list[str],
-        feed_types: list[str],
-    ) -> RunTrace:
-        # link figures to the calculation output first, then the other tool outputs
-        calc_first = dict(sorted(outputs.items(), key=lambda kv: "dollar_impact" not in kv[1]))
-        links = derive.link_numbers(answer, calc_first)
-        o = calc.output if calc else {}
-        start_prices = {r["instrument_id"]: r["start_price"] for r in st.rows}
-        inputs: dict[str, Any] = {}
-        intermediate: dict[str, Any] = {}
-        if calc is not None:
-            inputs = {
-                "positions": len(st.rows),
-                "start_prices": start_prices,
-                "window_start": st.start_day.isoformat() if st.start_day else None,
-                "net_flows_today": round(st.flows, 2),
-            }
-            intermediate = {
-                "covered_value": o.get("base", 0.0),
-                "by_holding": o.get("by_holding", {}),
-                "flows_excluded": o.get("flows_excluded", True),
-                "estimate_methods": {
-                    r["instrument_id"]: r["method"] for r in st.rows if "method" in r
-                },  # fmt: skip
-                **calc.intermediate,
-            }
-            if st.yields is not None:
-                intermediate["ust10y_change_bps"] = st.yields["ust10y_change_bps"]
-        pos_outs = [x for x in outputs.values() if "snapshot_id" in x]
-        snapshot = pos_outs[0]["snapshot_id"] if pos_outs else ""
-        return RunTrace(
-            run_id=q.run_id,
-            timestamp=q.timestamp,
-            household_id=res.household_id,
-            advisor_id=q.advisor_id,
-            prompt=q.prompt,
-            conversation_turn=q.turn,
-            resolved_intent=res.intent,
-            alternatives_considered=[Alternative(intent=i, score=s) for i, s in res.alternatives],
-            accounts_requested=derive.requested_accounts(
-                q.prompt, sorted(set(crm_types) | set(feed_types))
-            ),
-            accounts_resolved=list(res.scope_types) if calc else [],
-            time_window=res.window,
-            benchmark_index=st.benchmark,
-            interpretation_restated=derive.is_restated(answer),
-            tool_calls=calls,
-            expected_tool_set=self.expected_tools(q, st.rows),
-            holdings=[
-                Holding(
-                    account_id=r["account_id"],
-                    instrument_id=r["instrument_id"],
-                    qty=r["qty"],
-                    price=r["price"],
-                    price_as_of=datetime.fromisoformat(r["as_of"]),
-                    price_source=r["source"],
-                    instrument_type=r["instrument_type"],
-                )
-                for r in st.rows
-            ],
-            accounts_in_crm=sorted(crm_types),
-            accounts_in_feed=feed_types,
-            data_snapshot_id=snapshot,
-            inputs=inputs,
-            base=float(o.get("base", 0.0)),
-            calc_as_of=q.timestamp,
-            computed_by="tool" if calc is not None and calc.computed_by == "tool" else "llm",
-            intermediate_values=intermediate,
-            numbers_claimed=[v for _, v, _ in derive.parse_numbers(answer)],
-            number_to_tool_output_links=links,
-            certainty_and_advice_phrases=derive.phrases(answer),
-            estimate_label=derive.has_estimate_label(answer),
-            disclosures_present=derive.has_disclosure(answer),
-        )

@@ -5,7 +5,7 @@ D3,Feed timeout on one account,Data integrity,4,3,4,inject.modes.d3,checks.rules
 D4,Corporate action on large holding,Data integrity,4,2,3,inject.modes.d4,checks.rules.implausible_move,client_workbook
 D5,Stale holdings snapshot,Data integrity,3,3,4,inject.modes.d5,checks.rules.stale_snapshot,client_workbook
 D6,"Foreign holdings, market closed",Data integrity,3,3,4,inject.modes.d6,checks.rules.foreign_home_close,client_workbook
-D7,Conflicting price sources,Data integrity,3,3,4,inject.modes.d7,checks.rules.price_source,client_workbook
+D7,Conflicting price sources,Data integrity,3,3,4,inject.modes.d7,checks.rules.source_conflict,client_workbook
 C1,Mixed timestamps,Calculation,4,4,4,inject.modes.c1,checks.rules.mixed_timestamps,client_workbook
 C2,Bond duration vs. yield,Calculation,4,4,4,inject.modes.c2,checks.rules.bond_calc,client_workbook
 C3,Same-day cash flow,Calculation,4,3,4,inject.modes.c3,checks.rules.cash_flow_counted,client_workbook

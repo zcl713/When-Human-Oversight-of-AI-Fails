@@ -6,7 +6,7 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 PKG = SRC / "advisor_qa"
-GUARDED = ["advisor_qa.checks", "advisor_qa.scoring"]
+GUARDED = ["advisor_qa.checks", "advisor_qa.scoring", "advisor_qa.qa"]
 FORBIDDEN = [
     "advisor_qa.schema.labels",
     "advisor_qa.store.labels",

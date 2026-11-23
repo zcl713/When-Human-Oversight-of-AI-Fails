@@ -7,14 +7,17 @@ import pytest
 from advisor_qa import derive
 from advisor_qa.inject.modes import MODES
 from advisor_qa.inject.plan import dollar_error, make_label
+from advisor_qa.otel.model import TracesData
 from advisor_qa.pipeline.agent import RunResult
 from advisor_qa.pipeline.questions import Question
+from advisor_qa.qa.view import derive_view
 from advisor_qa.schema.trace import RunTrace
 from advisor_qa.store.runs import canonical_json, output_hash
 from advisor_qa.world import fixture as fx
 from tests.pipeline_world import Kit
 
-CLEAN_RUN = Path(__file__).parent.parent / "fixtures" / "clean_run.json"
+CLEAN_RUN = Path(__file__).parent.parent / "fixtures" / "clean_run.json"  # derived QA view
+CLEAN_OTLP = Path(__file__).parent.parent / "fixtures" / "clean_run.otlp.json"  # raw trace
 FIXTURE_DAY = date(2026, 3, 10)
 
 
@@ -28,10 +31,34 @@ def fixture_trace(kit: Kit) -> RunTrace:
 
 
 def test_fixture_run_is_the_golden_clean_run(kit: Kit) -> None:
-    """tests/fixtures/clean_run.json is the generator's own fixture run. To refresh it after an
-    intended change: `uv run python -m tests.unit.test_pipeline`."""
-    want = RunTrace.model_validate(json.loads(CLEAN_RUN.read_text()))
-    assert fixture_trace(kit) == want
+    """tests/fixtures/clean_run.otlp.json is the generator's own fixture run as emitted, and
+    clean_run.json the QA view derived from it. To refresh both after an intended change:
+    `uv run python -m tests.unit.test_pipeline`."""
+    r = kit.agent.run(kit.questions.fixture(FIXTURE_DAY))
+    assert r.otel == TracesData.model_validate(json.loads(CLEAN_OTLP.read_text()))
+    assert r.trace == RunTrace.model_validate(json.loads(CLEAN_RUN.read_text()))
+    assert derive_view(r.otel, kit.pipe) == r.trace  # the view comes from the spans alone
+
+
+def test_otel_trace_follows_genai_conventions(kit: Kit) -> None:
+    t = kit.agent.run(kit.questions.fixture(FIXTURE_DAY)).otel
+    root = t.root()
+    spans = list(t.spans())
+    assert root.name == "invoke_agent advisor-assistant"
+    assert root.attr("gen_ai.operation.name") == "invoke_agent"
+    assert root.attr("gen_ai.provider.name") == "synthetic"
+    assert len(root.traceId) == 32 and all(len(s.spanId) == 16 for s in spans)
+    assert all(s.parentSpanId == root.spanId for s in spans if s is not root)
+    tools = t.by_operation("execute_tool")
+    assert all(s.name == f"execute_tool {s.attr('gen_ai.tool.name')}" for s in tools)
+    assert all(s.attr("gen_ai.tool.call.id", "").startswith("call_") for s in tools)
+    chats = t.by_operation("chat")
+    assert [c.attr("gen_ai.response.finish_reasons") for c in chats][-1] == ["stop"]
+    assert all(c.attr("gen_ai.usage.output_tokens") > 0 for c in chats)
+    starts = [int(s.startTimeUnixNano) for s in spans if s is not root]
+    assert starts == sorted(starts) and int(root.endTimeUnixNano) >= max(starts)
+    keys = {kv.key for s in spans for kv in s.attributes}
+    assert not {k for k in keys if any(w in k for w in ("fault", "error_mode", "label"))}
 
 
 def estimation_error(kit: Kit, r: RunResult) -> float:
@@ -49,7 +76,7 @@ def test_fixture_run_is_an_estimate(kit: Kit) -> None:
     assert r.claimed_dollars is not None
     assert r.claimed_dollars - (-21_700) == pytest.approx(-estimation_error(kit, r), abs=0.5)
     assert abs(r.claimed_dollars + 21_700) < 0.002 * 1_200_000  # within 0.2% of the household
-    funds = {h.instrument_id for h in r.trace.holdings if h.price_source == "proxy_estimate"}
+    funds = {h.instrument_id for h in r.trace.holdings if h.price_source == "nav_estimate"}
     assert funds == {"INS-05", "INS-14", "INS-15"}
     assert "estimated from proxies" in r.answer and "VTHRX (0.60 x SPY + 0.40 x BND)" in r.answer
     assert "This covers 3 accounts worth $1,200,000" in r.answer
@@ -83,7 +110,7 @@ def test_clean_runs_differ_from_truth_only_by_estimation(
         est = estimation_error(kit, r)
         err = dollar_error(q, r, kit.truth)
         assert err <= abs(est) + 0.5, (q.prompt, r.answer, err, est)
-        if not any(h.price_source in ("proxy_estimate", "fair_value_estimate")
+        if not any(h.price_source in ("nav_estimate", "fair_value")
                    for h in r.trace.holdings):  # fmt: skip
             assert err == 0
         assert abs(est) <= 0.01 * max(r.trace.base, 1.0)
@@ -189,6 +216,9 @@ def test_fixture_question_identity(kit: Kit) -> None:
 
 
 if __name__ == "__main__":
-    t = fixture_trace(Kit())
-    CLEAN_RUN.write_text(json.dumps(t.model_dump(mode="json"), indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {CLEAN_RUN}")
+    r = Kit().agent.run(Kit().questions.fixture(FIXTURE_DAY))
+    CLEAN_RUN.write_text(json.dumps(r.trace.model_dump(mode="json"), indent=2) + "\n",
+                         encoding="utf-8")  # fmt: skip
+    otlp = r.otel.model_dump(mode="json", exclude_none=True)
+    CLEAN_OTLP.write_text(json.dumps(otlp, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {CLEAN_RUN} and {CLEAN_OTLP}")

@@ -217,3 +217,32 @@ Source: the client's red-team workbook (38 tests; shared on Drive, not committed
   or a tenth of it); the old percent-vs-base check is the supporting `pct_consistency`.
   `note_injection` replaces `unexpected_tool` for S3 (now supporting). A figure shown without a
   sign ("fell 0.03%") links to a tool value of either sign.
+
+## 2026-11-23: traces are OpenTelemetry (GenAI semantic conventions v0.1.0)
+- **Raw traces are OTLP/JSON**, one `TracesData` per run in `runs/{split}.jsonl`, following the
+  OpenTelemetry GenAI semantic conventions v0.1.0 (`open-telemetry/semantic-conventions-genai`,
+  released 2026-11-21; all GenAI attributes still have Development status). Span tree: root
+  `invoke_agent advisor-assistant`, then `chat advisor-llm-v1` turns (one per batch of tool calls,
+  `finish_reasons = ["tool_call"]`, last one `["stop"]`), each followed by its
+  `execute_tool {name}` spans. Trace id = run_id; span ids, timestamps (Unix ns from New York
+  time, DST by rule) and token counts are synthetic but consistent.
+- **Content capture is on** (the opt-in `gen_ai.input/output.messages`,
+  `gen_ai.system_instructions`, `gen_ai.tool.call.arguments/result`), as a regulated firm keeps
+  records of client communications. Chat inputs carry the user message and earlier tool calls
+  but not the tool results again (they are on the tool spans), to keep traces near 30 KB.
+- **Provider and model are placeholders** (`synthetic`, `advisor-llm-v1`). App facts live under
+  `advisor_qa.*` on the root span: advisor and household ids, conversation turn, and the agent's
+  own intent decision (resolved intent, candidate scores, account scope, time window).
+- **The 39-field RunTrace is a derived QA view** (`advisor_qa.qa.view.derive_view`), built from
+  the spans only. Checks read the view plus the raw tool results (`Evidence`). Nothing in a trace
+  says whether a step was a fault: the self-labelling fields (`vendor_b`, `flows_excluded`,
+  `*_method`, `computed_by` set by faults) are gone. `computed_by` is now "no calculation-tool
+  span"; holdings come from the calculation tool's arguments, or, if the agent did the sum
+  itself, from positions and quotes priced the platform's way.
+- **Faults are data condition + silent agent**, following the workbook: D2 the 401(k) is on
+  record but not in the data feed, D3 one account times out (span status ERROR,
+  `error.type = timeout`), D7 custodian and vendor prices differ by over 1%, C5 a booked total in
+  the CRM disagrees with the holdings. The correct agent states each one (coverage "2 of 3
+  accounts", "timed out", "differ by more than 1%"); the faulty agent does not.
+- **The answers sidecar is gone**: the answer is in `gen_ai.output.messages`. A full dataset is
+  about 324 MB and takes about 3 minutes to generate.

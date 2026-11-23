@@ -224,3 +224,21 @@ def mix_benchmark(share: float) -> str:
         return "SPY"
     w = min(80, max(10, int(round(share * 10)) * 10))
     return f"SPY{w}/BND{100 - w}"
+
+
+def prompt_intent(prompt: str) -> str:
+    """The QA layer's own reading of what a prompt asks (a rule, not the agent's decision)."""
+    low = prompt.lower()
+    if is_worry_prompt(prompt):
+        return "market_concern"
+    if "sell" in low or "buy" in low:
+        return "sell_inquiry"
+    if "tax" in low:
+        return "tax_inquiry"
+    if "rate move" in low or "yield" in low:
+        return "rates_impact"
+    if "since they started" in low or "since i started" in low or "since inception" in low:
+        return "portfolio_performance"
+    if requested_benchmark(prompt) is not None:
+        return "benchmark_comparison"
+    return "portfolio_impact"

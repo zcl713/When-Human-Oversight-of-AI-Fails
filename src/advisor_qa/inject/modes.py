@@ -132,7 +132,7 @@ def d1(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
     """Stale mutual fund NAV: yesterday's NAV used as today's, so the funds show as flat."""
 
     def hook(row: dict[str, Any], quote: dict[str, Any], st: RunState) -> None:
-        if row["source"] == "proxy_estimate":
+        if row["source"] == "nav_estimate":
             row.update(price=quote["nav"], as_of=quote["nav_as_of"], source="nav")
             row.pop("method", None)
 
@@ -140,8 +140,26 @@ def d1(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
 
 
 def d2(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
-    """Held-away 401(k) not in the data feed the agent reads; it answers for the rest as 'all'."""
-    f.crm_drop_types.add("401k_held_away")
+    """Held-away 401(k) at another custodian is not in the data feed; the agent answers for the
+    rest and calls it the whole portfolio (no coverage statement)."""
+
+    def feed(out: dict[str, Any], st: RunState) -> str | None:
+        out["positions"] = [p for p in out["positions"] if p["account_type"] != "401k_held_away"]
+        out["accounts_in_feed"] = [t for t in out["accounts_in_feed"] if t != "401k_held_away"]
+        return None
+
+    def answer(s: Sentence, st: RunState) -> None:
+        assert st.calc is not None
+        base = st.calc.output["base"]
+        for k, (tag, _text) in enumerate(s):
+            if tag == "coverage":
+                s[k] = (tag, f"This covers your portfolio, worth ${base:,.0f} at the start.")
+            elif tag == "restate":
+                s[k] = (tag, f"{derive.RESTATE_MARK} the change since yesterday's close across "
+                             "all accounts.")  # fmt: skip
+
+    f.tool.append(_tool_hook("get_positions", feed))
+    f.answer.append(answer)
 
 
 def d3(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
@@ -150,10 +168,13 @@ def d3(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
     lost = types[int(rng.integers(len(types)))]
 
     def fn(out: dict[str, Any], st: RunState) -> str | None:
+        failed = sorted({p["account_id"] for p in out["positions"] if p["account_type"] == lost})
         out["positions"] = [p for p in out["positions"] if p["account_type"] != lost]
-        return "partial"
+        out["errors"] = [{"account_id": a, "error": "timeout"} for a in failed]
+        return "timeout"
 
     f.tool.append(_tool_hook("get_positions", fn))
+    f.answer.append(_drop("partial"))  # the agent does not say an account is missing
 
 
 def d4(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
@@ -201,7 +222,7 @@ def d6(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
     value, without saying the market is closed."""
 
     def hook(row: dict[str, Any], quote: dict[str, Any], st: RunState) -> None:
-        if row["source"] == "fair_value_estimate":
+        if row["source"] == "fair_value":
             row.update(price=quote["price"], as_of=quote["as_of"], source="home_close")
             row.pop("method", None)
 
@@ -215,11 +236,19 @@ def d7(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
     target = etfs[int(rng.integers(len(etfs)))]
     off = float(rng.uniform(0.01, 0.03)) * (1 if rng.random() < 0.5 else -1)
 
-    def hook(row: dict[str, Any], quote: dict[str, Any], st: RunState) -> None:
-        if row["instrument_id"] == target:
-            row.update(price=round(row["price"] * (1 + off), 6), source="vendor_b")
+    def quotes(out: dict[str, Any], st: RunState) -> str | None:
+        q = out["quotes"].get(target)
+        if q is not None:
+            q["vendor_price"] = round(q["price"] * (1 + off), 6)
+        return None
 
-    f.row.append(hook)
+    def row(row: dict[str, Any], quote: dict[str, Any], st: RunState) -> None:
+        if row["instrument_id"] == target:
+            row.update(price=quote["vendor_price"], source="vendor")
+
+    f.tool.append(_tool_hook("get_quotes", quotes))
+    f.row.append(row)
+    f.answer.append(_drop("discrepancy"))  # picks one source silently
 
 
 # --- Calculation (C) ----------------------------------------------------------------------------
@@ -287,17 +316,26 @@ def c4(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
 
 
 def c5(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
-    """Reconciliation break: the percent uses the CRM's booked total, which disagrees with the
-    holdings (pending trades, cash sweep), and nobody notices."""
-    off = float(rng.uniform(0.02, 0.08)) * (1 if rng.random() < 0.5 else -1)
+    """Reconciliation break: a booked account total in the CRM disagrees with the holdings
+    (pending trades, cash sweep), and the agent uses the booked totals as the base unnoticed."""
+    off = float(rng.uniform(0.05, 0.15)) * (1 if rng.random() < 0.5 else -1)
+    pick = float(rng.random())
 
-    def hook(calc: Calc, st: RunState) -> None:
-        o = calc.output
-        o["base"] = round(o["base"] * (1 + off), 2)
-        _reprice_pct(o)
-        calc.intermediate["base_source"] = "crm_booked_total"
+    def accounts(out: dict[str, Any], st: RunState) -> str | None:
+        acc = out["accounts"]
+        if acc:
+            a = acc[int(pick * len(acc))]
+            a["booked_value"] = round(a["booked_value"] * (1 + off), 2)
+        return None
 
-    f.calc.append(hook)
+    def calc_hook(calc: Calc, st: RunState) -> None:
+        assert st.res is not None
+        booked = sum(a["booked_value"] for a in st.accounts if a["type"] in st.res.scope_types)
+        calc.args["base"] = round(booked, 2)
+        recompute(calc, st.rows, st.flows)
+
+    f.tool.append(_tool_hook("get_accounts", accounts))
+    f.calc.append(calc_hook)
 
 
 def c6(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
@@ -537,8 +575,8 @@ def t1(ctx: Ctx, f: Faults, rng: np.random.Generator) -> None:
         for r in st.rows:
             r["start_price"] = p.prior_close(r["instrument_id"], start)
         st.start_day = start
+        calc.args["period"] = period
         recompute(calc, st.rows, st.flows)
-        calc.args = {"holdings": len(st.rows), "period": period}
 
     f.calc.insert(0, hook)
 

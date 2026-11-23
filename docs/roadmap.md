@@ -16,7 +16,8 @@ questions are in `open_questions.md`.
 | Ground-truth portfolio impact | `src/advisor_qa/truth/` | **Done** (`Truth.impact`; fixture -$21,700 from the price layer) |
 | Questions, mock tools, correct agent, clean traces | `src/advisor_qa/pipeline/` | **Done** (12 question kinds; our 15-tool inventory; funds estimated from proxies; `clean_run.json` is the generated fixture run) |
 | Error injection and hidden labels | `src/advisor_qa/inject/` | **Done** (30 workbook modes + team-added T1; setups follow the client workbook; placeholder rates and severity) |
-| Run and label storage | `src/advisor_qa/store/` | **Done** (per-split JSONL, manifest) |
+| Run and label storage | `src/advisor_qa/store/` | **Done** (per-split JSONL of OTLP traces, labels, manifest) |
+| OpenTelemetry traces and the QA view | `src/advisor_qa/otel/`, `src/advisor_qa/qa/` | **Done** (GenAI semconv v0.1.0, content capture on; the 39-field RunTrace is derived from spans) |
 | Checks, risk score, evaluation at capacity K | `src/advisor_qa/checks/`, `scoring/`, `eval/` | **Done, v1** (31 mapped checks, weighted sum, random vs risk at 5% / 10%) |
 | Dashboard | `dashboard/` | Prototype on placeholder data. Update once there are findings. |
 
@@ -83,10 +84,12 @@ Roughly in order. There are no fixed roles: anyone picks up any item.
 3. **Hand-calculated tests for the truth function** (leveraged ETF, foreign holding, a
    week-to-date window), and decide what `as_of` on a weekend or holiday should do (today it
    raises an error).
-4. **Harder checks to fool**: the checks were written next to the mutations, so results are
-   optimistic. Options: someone other than the injector's author writes or reviews checks; make
-   mutations noisier (vary the wording of advice and forward-looking claims); an intent
-   classifier for I1 / I5 instead of the rule.
+4. **Make the evaluation honest** (the biggest gap now): clean runs have no noise, so anything
+   flagged is an error and top-K review stays near perfect. In order: (a) benign noise in clean
+   runs (retries, disclosed stale prices, paraphrased refusals, harmless unlinked figures,
+   skipped restatements on clear questions); (b) held-out mutation variants (tune checks on one
+   way a mode happens, evaluate on another); (c) errors of varying size; (d) someone other than
+   the injector's author reviews the checks.
 5. **Risk score**: better weights than suite severity; a trained scorer stays out of scope for v1.
 6. **Rare modes**: C4, C7, O4, S1, S4 have only a handful of runs per split. Raise exposure
    (more leveraged holders, more rates / inception questions) if per-mode results are reported.

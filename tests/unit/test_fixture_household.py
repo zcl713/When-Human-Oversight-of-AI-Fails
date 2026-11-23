@@ -62,13 +62,11 @@ def test_clean_run_json_matches_fixture() -> None:
     start = trace.inputs["start_prices"]
     for h in trace.holdings:
         assert start[h.instrument_id] == inst.loc[h.instrument_id, "reference_price"]
-        if h.price_source == "feed":
+        if h.price_source == "live":
             move = DAY_MOVES[h.instrument_id]
             assert h.price == pytest.approx(start[h.instrument_id] * (1 + move))
         else:
-            assert (
-                h.price_source == "proxy_estimate" and inst.loc[h.instrument_id, "is_mutual_fund"]
-            )
+            assert h.price_source == "nav_estimate" and inst.loc[h.instrument_id, "is_mutual_fund"]
         assert h.instrument_type == inst.loc[h.instrument_id, "instrument_type"]
     assert sum(h.qty * start[h.instrument_id] for h in trace.holdings) == trace.base == 1_200_000
     assert trace.estimate_label and trace.numbers_claimed[2] == 1_200_000

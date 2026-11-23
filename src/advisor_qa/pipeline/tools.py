@@ -27,7 +27,7 @@ from advisor_qa.world.price_params import PriceParams
 from advisor_qa.world.prices import PriceWorld
 from advisor_qa.world.streams import stream
 
-ESTIMATE_SOURCES = {"proxy_estimate", "fair_value_estimate"}
+ESTIMATE_SOURCES = {"nav_estimate", "fair_value"}
 HISTORY_STARTS = date(2019, 1, 2)  # transaction history before this is missing (O4 setup)
 
 # instrument_id -> [(proxy series id, weight)]; the estimate moves by sum(weight x proxy return)
@@ -275,6 +275,9 @@ class Tools:
             px, as_of = p.published_price(ins, self.as_of)
             q: dict[str, Any] = {"price": px, "as_of": _ts(as_of),
                                  "start_price": p.prior_close(ins, start_day)}  # fmt: skip
+            if self.w.kind(ins) == "etf":  # market-data vendor's price: within a few bp normally
+                noise = stream(self.w.seed, "vendor_price", ins, _ts(self.as_of)).normal(0, 2e-4)
+                q["vendor_price"] = round(px * (1 + float(noise)), 6)
             if self.w.kind(ins) == "foreign":
                 q.update(
                     market_status="closed",
@@ -358,6 +361,7 @@ def calculate_portfolio_impact(
     holdings: Sequence[dict[str, Any]],
     net_flows_today: float = 0.0,
     benchmark_pct: float | None = None,
+    base_override: float | None = None,
 ) -> dict[str, Any]:
     """Impact from qty, price and start price per holding. Used by `calculate_portfolio_impact`
     (today) and `get_performance` (week, month, year). Flows are excluded: the positions are
@@ -370,6 +374,8 @@ def calculate_portfolio_impact(
         current += h["qty"] * h["price"]
         by_holding[key] = round(h["qty"] * (h["price"] - h["start_price"]), 2)
     dollars = round(current - base, 2)
+    if base_override is not None:  # the caller supplied a base (e.g. booked account totals)
+        base = base_override
     pct = round(100 * dollars / base, 4) if base else 0.0
     out: dict[str, Any] = {
         "dollar_impact": dollars,

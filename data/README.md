@@ -43,9 +43,11 @@ choices or assumptions, marked in `config/default.yaml` (`prices:`). Every price
 `advisor_qa.world.prices.read_price_table`.
 
 ### Runs (synthetic)
-`advisor_qa.pipeline.generate` writes `data/synthetic/runs/`: `runs/`, `answers/` and `labels/`
-(one JSONL file per split; labels are evaluation-only), `split_households.csv`, `directory.csv`
-(CRM directory with made-up client names) and `manifest.json`. Layout: `advisor_qa/store/runs.py`.
+`advisor_qa.pipeline.generate` writes `data/synthetic/runs/`: `runs/` (one OpenTelemetry OTLP/JSON
+trace per line, GenAI semantic conventions v0.1.0, content capture on) and `labels/` (one JSONL
+file per split; labels are evaluation-only), `split_households.csv`, `directory.csv` (CRM
+directory with made-up client names) and `manifest.json`. About 324 MB in all. The 39-field
+RunTrace is derived from each trace by `advisor_qa.qa.view`. Layout: `advisor_qa/store/runs.py`.
 
 ### What is generated, not SCF
 Advisors, account IDs, security-level holdings, ETF vs mutual-fund split, options/leveraged ETF

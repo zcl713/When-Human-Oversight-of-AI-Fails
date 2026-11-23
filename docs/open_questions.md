@@ -50,8 +50,16 @@ Things that work but are weaker than they look. None blocks the current pipeline
   missing. The circularity is gone: since 2026-11-23 the correct agent estimates funds instead of
   reading the true value, and tests check that its error equals the estimation error exactly.
 - **`as_of` on a weekend or holiday** raises an error instead of snapping to the last close.
-- **Checks were written next to the mutations**, so each check knows the trace signature its
-  mutation leaves. The 7.5x lift at `rate_scale` 0.2 is close to the ceiling and is an upper bound.
+- **Checks were written next to the mutations, and clean runs have no noise.** Since the traces
+  became OpenTelemetry (2026-11-23) no field labels a fault, but every fault still leaves some
+  evidence and clean runs leave none, so top-K review stays near perfect (7.6x at `rate_scale`
+  0.2, the ceiling). Benign noise and held-out mutation variants are the fix (roadmap item 4).
+- **Some modes cannot be told apart from the trace.** When the agent does the arithmetic itself
+  (C2, C3, C4, C6), the trace shows only that the total does not add up, not why; C2 and C4
+  checks therefore also fire on C6 (train precision 0.50 and 0.11), and holdings for those runs
+  are rebuilt from quotes, which hides a D1 or C5 on the same run.
+- **The GenAI conventions are at v0.1.0, Development status**; attribute names may change. Our
+  traces carry `advisor_qa.semconv.genai.version` on the resource.
 - **Masked modes keep their label.** When two modes on a run interact (e.g. D3 drops the account
   that D4 targeted), the run is still labelled with both, though one had no effect. Some checks
   probably miss for this reason (e.g. D1 recall 0.98 on train; not verified run by run).

@@ -8,6 +8,7 @@ import pytest
 from advisor_qa.checks.rules import CHECKS, CrmDirectory, run_checks
 from advisor_qa.eval.evaluate import check_diagnostics, evaluate
 from advisor_qa.inject.modes import MODES
+from advisor_qa.otel.model import TracesData
 from advisor_qa.pipeline.questions import Question
 from advisor_qa.schema.trace import NumberLink, RunTrace, ToolCall
 from advisor_qa.scoring.weighted import FlagCount, WeightedSum
@@ -29,8 +30,8 @@ def directory() -> CrmDirectory:
                         "Avery Chen"})  # fmt: skip
 
 
-def fired(t: RunTrace, d: CrmDirectory) -> set[str]:
-    return {k for k, v in run_checks(t, d).items() if v}
+def fired(t: RunTrace, d: CrmDirectory, otel: TracesData | None = None) -> set[str]:
+    return {k for k, v in run_checks(t, otel, d).items() if v}
 
 
 def test_clean_run_fires_nothing(clean: RunTrace, directory: CrmDirectory) -> None:
@@ -43,11 +44,11 @@ def _broken(clean: RunTrace, how: str) -> RunTrace:
         h = next(h for h in t.holdings if h.instrument_type == "mutual_fund")
         h.price_as_of, h.price_source = datetime(2026, 3, 9, 16), "nav"
     elif how == "account_coverage":
-        t.accounts_in_crm = ["ira", "taxable"]
+        t.accounts_in_feed = ["ira", "taxable"]  # the 401(k) is on record but not in the feed
     elif how == "tool_failure":
         t.tool_calls[1] = t.tool_calls[1].model_copy(update={"status": "timeout"})
     elif how == "price_source":
-        t.holdings[0].price_source = "vendor_b"
+        t.holdings[0].price_source = "home_close"
     elif how == "base_reconciliation":
         t.base = t.base * 1.05
     elif how == "percent_scale":
@@ -79,8 +80,7 @@ def _broken(clean: RunTrace, how: str) -> RunTrace:
     "check",
     ["stale_fund_nav", "account_coverage", "tool_failure", "price_source", "base_reconciliation",
      "percent_scale", "stale_snapshot", "unexpected_tool", "advice", "unlabelled_estimate",
-     "unassigned_access", "implausible_move", "mixed_timestamps", "note_injection",
-     "calc_tool_mismatch"],
+     "unassigned_access", "implausible_move", "mixed_timestamps", "calc_tool_mismatch"],
 )  # fmt: skip
 def test_hand_broken_trace_fires_its_check(
     clean: RunTrace, directory: CrmDirectory, check: str
@@ -110,7 +110,8 @@ def test_generated_clean_runs_fire_only_support_signals(
 ) -> None:
     d = _crm(kit)
     for q in questions:
-        got = fired(kit.agent.run(q).trace, d) - {"ambiguous_surname"}
+        r = kit.agent.run(q)
+        got = fired(r.trace, d, r.otel) - {"ambiguous_surname"}
         assert got <= set(), (q.kind, q.prompt, got)
 
 
@@ -132,7 +133,8 @@ def test_each_injected_mode_is_caught_by_its_check(
             continue
         p = kit.injector.build(q, chosen, incident)
         total += 1
-        caught += MAPPED[mode] in fired(kit.agent.run(p.question, p.faults).trace, d)
+        r = kit.agent.run(p.question, p.faults)
+        caught += MAPPED[mode] in fired(r.trace, d, r.otel)
         if total == 20:
             break
     assert total and caught / total >= 0.5, (mode, caught, total)
@@ -172,5 +174,6 @@ def test_evaluate_risk_beats_random_on_a_toy_split() -> None:
 
 def test_support_checks_are_unmapped() -> None:
     assert SUPPORT == {"ambiguous_surname", "llm_calculation", "missing_expected_tool",
-                       "missing_disclosure", "unexpected_tool", "pct_consistency"}  # fmt: skip
+                       "missing_disclosure", "unexpected_tool", "pct_consistency",
+                       "price_source"}  # fmt: skip
     assert sorted(MAPPED) == sorted(m.id for m in MODES)

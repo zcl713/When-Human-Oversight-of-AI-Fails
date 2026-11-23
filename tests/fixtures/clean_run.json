@@ -51,12 +51,12 @@
     {
       "tool_name": "get_positions",
       "args": {
-        "household_id": "HH-004217",
         "account_ids": [
           "ACC-88120",
           "ACC-88121",
           "ACC-88122"
-        ]
+        ],
+        "household_id": "HH-004217"
       },
       "status": "ok",
       "latency_ms": 179.4,
@@ -65,12 +65,12 @@
     {
       "tool_name": "get_transactions",
       "args": {
-        "household_id": "HH-004217",
         "account_ids": [
           "ACC-88120",
           "ACC-88121",
           "ACC-88122"
         ],
+        "household_id": "HH-004217",
         "since": "2026-03-10"
       },
       "status": "ok",
@@ -105,7 +105,7 @@
       },
       "status": "ok",
       "latency_ms": 113.9,
-      "output_hash": "04f8023047ad"
+      "output_hash": "b85d7f45e63a"
     },
     {
       "tool_name": "get_fund_navs",
@@ -124,7 +124,76 @@
     {
       "tool_name": "calculate_portfolio_impact",
       "args": {
-        "holdings": 6,
+        "as_of": "2026-03-10T14:05:00",
+        "holdings": [
+          {
+            "account_id": "ACC-88120",
+            "account_type": "taxable",
+            "instrument_id": "INS-01",
+            "instrument_type": "equity_etf",
+            "price": 440.55,
+            "price_as_of": "2026-03-10T14:05:00",
+            "price_source": "live",
+            "qty": 1000.0,
+            "start_price": 450.0
+          },
+          {
+            "account_id": "ACC-88120",
+            "account_type": "taxable",
+            "instrument_id": "INS-05",
+            "instrument_type": "mutual_fund",
+            "price": 97.80894,
+            "price_as_of": "2026-03-10T14:05:00",
+            "price_source": "nav_estimate",
+            "qty": 2000.0,
+            "start_price": 100.0
+          },
+          {
+            "account_id": "ACC-88120",
+            "account_type": "taxable",
+            "instrument_id": "INS-08",
+            "instrument_type": "bond_fund",
+            "price": 49.4,
+            "price_as_of": "2026-03-10T14:05:00",
+            "price_source": "live",
+            "qty": 4000.0,
+            "start_price": 50.0
+          },
+          {
+            "account_id": "ACC-88121",
+            "account_type": "ira",
+            "instrument_id": "INS-02",
+            "instrument_type": "equity_etf",
+            "price": 293.7,
+            "price_as_of": "2026-03-10T14:05:00",
+            "price_source": "live",
+            "qty": 500.0,
+            "start_price": 300.0
+          },
+          {
+            "account_id": "ACC-88121",
+            "account_type": "ira",
+            "instrument_id": "INS-14",
+            "instrument_type": "target_date_fund",
+            "price": 24.565,
+            "price_as_of": "2026-03-10T14:05:00",
+            "price_source": "nav_estimate",
+            "qty": 4000.0,
+            "start_price": 25.0
+          },
+          {
+            "account_id": "ACC-88122",
+            "account_type": "401k_held_away",
+            "instrument_id": "INS-15",
+            "instrument_type": "target_date_fund",
+            "price": 39.25,
+            "price_as_of": "2026-03-10T14:05:00",
+            "price_source": "nav_estimate",
+            "qty": 2500.0,
+            "start_price": 40.0
+          }
+        ],
+        "net_flows_today": 0,
         "period": "intraday"
       },
       "status": "ok",
@@ -149,7 +218,7 @@
       "qty": 1000.0,
       "price": 440.55,
       "price_as_of": "2026-03-10T14:05:00",
-      "price_source": "feed",
+      "price_source": "live",
       "instrument_type": "equity_etf"
     },
     {
@@ -158,7 +227,7 @@
       "qty": 2000.0,
       "price": 97.80894,
       "price_as_of": "2026-03-10T14:05:00",
-      "price_source": "proxy_estimate",
+      "price_source": "nav_estimate",
       "instrument_type": "mutual_fund"
     },
     {
@@ -167,7 +236,7 @@
       "qty": 4000.0,
       "price": 49.4,
       "price_as_of": "2026-03-10T14:05:00",
-      "price_source": "feed",
+      "price_source": "live",
       "instrument_type": "bond_fund"
     },
     {
@@ -176,7 +245,7 @@
       "qty": 500.0,
       "price": 293.7,
       "price_as_of": "2026-03-10T14:05:00",
-      "price_source": "feed",
+      "price_source": "live",
       "instrument_type": "equity_etf"
     },
     {
@@ -185,7 +254,7 @@
       "qty": 4000.0,
       "price": 24.565,
       "price_as_of": "2026-03-10T14:05:00",
-      "price_source": "proxy_estimate",
+      "price_source": "nav_estimate",
       "instrument_type": "target_date_fund"
     },
     {
@@ -194,7 +263,7 @@
       "qty": 2500.0,
       "price": 39.25,
       "price_as_of": "2026-03-10T14:05:00",
-      "price_source": "proxy_estimate",
+      "price_source": "nav_estimate",
       "instrument_type": "target_date_fund"
     }
   ],
@@ -219,8 +288,8 @@
       "INS-14": 25.0,
       "INS-15": 40.0
     },
-    "window_start": "2026-03-10",
-    "net_flows_today": 0
+    "net_flows_today": 0,
+    "period": "intraday"
   },
   "base": 1200000.0,
   "calc_as_of": "2026-03-10T14:05:00",
@@ -235,7 +304,6 @@
       "ACC-88121/INS-14": -1740.0,
       "ACC-88122/INS-15": -1875.0
     },
-    "flows_excluded": true,
     "estimate_methods": {
       "INS-05": "proxy VUG",
       "INS-14": "0.60 x SPY + 0.40 x BND",

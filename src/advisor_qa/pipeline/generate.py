@@ -19,20 +19,19 @@ import numpy as np
 import pandas as pd
 
 from advisor_qa.inject.plan import Injector, dollar_error, load_catalogue, make_label
+from advisor_qa.otel.model import TracesData
 from advisor_qa.pipeline.agent import Agent, RunResult
 from advisor_qa.pipeline.directory import Directory, build_directory
 from advisor_qa.pipeline.params import InjectionParams, PipelineParams, load_pipeline_config
 from advisor_qa.pipeline.questions import QuestionGenerator
 from advisor_qa.pipeline.tools import ESTIMATE_SOURCES, World, estimate_rules
 from advisor_qa.schema.labels import RunLabel
-from advisor_qa.schema.trace import RunTrace
 from advisor_qa.store.labels import write_labels
 from advisor_qa.store.runs import (
     DIRECTORY_FILE,
     SPLIT_FILE,
     SPLITS,
     Manifest,
-    write_answers,
     write_manifest,
     write_runs,
 )
@@ -46,8 +45,7 @@ from advisor_qa.world.split import assign_households, load_split_params
 
 @dataclass
 class Dataset:
-    runs: dict[str, list[RunTrace]] = field(default_factory=lambda: defaultdict(list))
-    answers: dict[str, list[tuple[str, str]]] = field(default_factory=lambda: defaultdict(list))
+    runs: dict[str, list[TracesData]] = field(default_factory=lambda: defaultdict(list))
     labels: dict[str, list[RunLabel]] = field(default_factory=lambda: defaultdict(list))
     # clean runs: (run_id, |answer - truth|, base). Only estimated holdings may cause an error.
     clean_errors: list[tuple[str, float, float]] = field(default_factory=list)
@@ -95,14 +93,14 @@ def generate(
             estimated = any(h.price_source in ESTIMATE_SOURCES for h in clean.trace.holdings)
             if err > 0 and not estimated:
                 out.unexplained.append((q.run_id, err))
-            out.runs[s].append(result.trace)
-            out.answers[s].append((q.run_id, result.answer))
+            out.runs[s].append(result.otel)
             out.labels[s].append(label)
     for s in list(out.runs):
-        order = sorted(range(len(out.runs[s])),
-                       key=lambda k: (out.runs[s][k].timestamp, out.runs[s][k].run_id))  # fmt: skip
+        roots = [t.root() for t in out.runs[s]]
+        order = sorted(
+            range(len(roots)), key=lambda k: (int(roots[k].startTimeUnixNano), roots[k].traceId)
+        )
         out.runs[s] = [out.runs[s][k] for k in order]
-        out.answers[s] = [out.answers[s][k] for k in order]
         out.labels[s] = [out.labels[s][k] for k in order]
     return out
 
@@ -111,7 +109,6 @@ def write_dataset(ds: Dataset, root: Path, seed: int, config_path: Path = DEFAUL
     root.mkdir(parents=True, exist_ok=True)
     for s in SPLITS:
         write_runs(root, s, ds.runs.get(s, []))
-        write_answers(root, s, ds.answers.get(s, []))
         write_labels(root, s, ds.labels.get(s, []))
     assert ds.split is not None and ds.directory is not None
     ds.split.to_csv(root / SPLIT_FILE, index=False, lineterminator="\n")
