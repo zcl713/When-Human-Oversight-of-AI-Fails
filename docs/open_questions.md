@@ -12,7 +12,9 @@ Resolved items move to `decisions.md`.
   `injection.rate_scale` (or `generate --rate-scale`) scales them all. 0.2 gives about 13%.
   What prevalence the study should assume is the open part. **Check with Lopa (LPL)** whether
   there is a requirement or an observed error rate to target; the 0.2 used in the first
-  evaluation was our own choice, not calibrated to anything.
+  evaluation was our own choice, not calibrated to anything. Hints so far (decisions.md,
+  2026-11-23): the client workbook suggests seeding "1 in 50" for reviewer experiments; TRAIL's
+  research traces have errors in about 97% of traces, but on much harder tasks.
 - **Tool inventory and what counts as a "wrong tool"**: confirm with Lopa at LPL. A provisional
   list is in use (see `decisions.md`, 2026-11-20). It adds `get_market_news` and
   `get_client_notes`, because S3 and S4 need a note and a news feed to inject into.
