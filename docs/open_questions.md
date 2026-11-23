@@ -1,32 +1,32 @@
 # Open questions
 
-Resolved items move to `decisions.md`. The owner is who needs the answer to proceed (see `roadmap.md`).
+Resolved items move to `decisions.md`.
 
 ## Blocks dataset work
-- **Number of households, trading days, questions per day** (A, B): recommended values are in
+- **Number of households, trading days, questions per day**: recommended values are in
   `config/default.yaml` (750 / 180 / 60). Households are drawn without repeating an SCF family, and
   1,160 families qualify, so at most 1,160.
 - **Failure-rate placeholders** per Likelihood score (1 = 0.5%, 2 = 1%, 3 = 3%, 4 = 8%, 5 = 15% per
-  exposed run) (A, B). Implemented as placeholders. Because many modes are exposed on most runs,
+  exposed run). Implemented as placeholders. Because many modes are exposed on most runs,
   they give about 52% of runs an error, which caps the lift of any review at about 2x;
   `injection.rate_scale` (or `generate --rate-scale`) scales them all. 0.2 gives about 13%.
   What prevalence the study should assume is the open part. **Check with Lopa (LPL)** whether
   there is a requirement or an observed error rate to target; the 0.2 used in the first
   evaluation was our own choice, not calibrated to anything.
-- **Tool inventory and what counts as a "wrong tool"** (B): confirm with Lopa at LPL. A provisional
+- **Tool inventory and what counts as a "wrong tool"**: confirm with Lopa at LPL. A provisional
   list is in use (see `decisions.md`, 2026-11-20). It adds `get_market_news` and
   `get_client_notes`, because S3 and S4 need a note and a news feed to inject into.
-- **ID for the "wrong tool" failure mode** (B): the old prototype used T1, pending Lopa's review. Not
+- **ID for the "wrong tool" failure mode**: the old prototype used T1, pending Lopa's review. Not
   in `FailureModeId` yet.
-- **Severity formula** for the hidden label (B): a placeholder is implemented (highest suite
+- **Severity formula** for the hidden label: a placeholder is implemented (highest suite
   severity + log10(1 + dollar error); `inject/plan.py`). The real formula is still open.
 
 ## Blocks checks and evaluation
-- **Which checks to build and how risk is computed** (C): v1 is in place (30 rule-based checks,
+- **Which checks to build and how risk is computed**: v1 is in place (30 rule-based checks,
   weighted sum). Open: an independent intent classifier instead of the rule for I1/I5, better
   weights than suite severity, and whether checks may read more external data than the CRM
   directory.
-- **Capacities K to test** (C): default 5% and 10%.
+- **Capacities K to test**: default 5% and 10%.
 
 ## Assumptions to confirm (not from SCF)
 These are in `config/default.yaml` or `instruments.csv`. Change them if a collaborator knows better.

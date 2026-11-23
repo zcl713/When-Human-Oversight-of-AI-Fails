@@ -70,24 +70,23 @@ at `--rate-scale 0.2` (13%) it is 7.5x, close to the 7.6x ceiling. Read these as
 (see "Known gaps" in open_questions.md).
 
 ## What is left
-Roughly in order. Owners follow the original split: A (world and truth), B (agent and runs),
-C (checks and evaluation).
+Roughly in order. There are no fixed roles: anyone picks up any item.
 
-1. **Answers from Lopa (LPL)**: tool inventory and "wrong tool" (B), whether there is a target
-   error rate for `rate_scale` (A, B), and whether the firm shows intraday indicative NAVs (A).
+1. **Answers from Lopa (LPL)**: tool inventory and "wrong tool", whether there is a target
+   error rate for `rate_scale`, and whether the firm shows intraday indicative NAVs.
    Each is a config or small code change once answered.
-2. **Failure rates and severity** (A, B): replace the placeholders; then regenerate and re-run
+2. **Failure rates and severity**: replace the placeholders; then regenerate and re-run
    the evaluation.
-3. **Independent tests for the truth function** (A): hand-calculated cases (leveraged ETF, foreign
+3. **Independent tests for the truth function**: hand-calculated cases (leveraged ETF, foreign
    holding, a week-to-date window), and decide what `as_of` on a weekend or holiday should do
    (today it raises an error).
-4. **Harder checks to fool** (C): the checks were written next to the mutations, so results are
+4. **Harder checks to fool**: the checks were written next to the mutations, so results are
    optimistic. Options: someone other than the injector's author writes or reviews checks; make
    mutations noisier (e.g. vary the wording of advice and forward-looking claims); add an intent
    classifier for I1 / I5 instead of the rule.
-5. **Risk score** (C): better weights than suite severity (single-signal modes such as I4, O3
+5. **Risk score**: better weights than suite severity (single-signal modes such as I4, O3
    and S2 rank below multi-flag runs at K = 5%); a trained scorer stays out of scope for v1.
-6. **Rare modes** (A, B): C4, S3, D6, S1, O2, O5 have only a handful of runs per split at the
+6. **Rare modes**: C4, S3, D6, S1, O2, O5 have only a handful of runs per split at the
    placeholder rates. Raise exposure (more leveraged / foreign holders, more sell and tax
    questions) if per-mode results are to be reported.
 7. **Dashboard** (`dashboard/`): move from placeholder data to `report.json` and `flags.csv`.
